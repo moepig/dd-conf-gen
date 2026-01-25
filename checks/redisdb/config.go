@@ -8,11 +8,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// 設定ファイル全体を表す構造体
+// アプリケーション設定ファイル全体を表す構造体
 type Config struct {
-	GenerateConfig   GenerateConfig         `yaml:"generate_config"`
-	InstanceTemplate interface{}            `yaml:"instance_template"`
-	OtherConfigs     map[string]interface{} `yaml:",inline"`
+	// チェック設定生成のための設定
+	GenerateConfig GenerateConfig `yaml:"generate_config"`
+
+	// .instances[] の要素のテンプレート
+	InstanceTemplate interface{} `yaml:"instance_template"`
+
+	// その他の設定 そのまま出力物に含まれる
+	OtherConfigs map[string]interface{} `yaml:",inline"`
 }
 
 type GenerateConfig struct {
@@ -27,6 +32,16 @@ type GenerateConfig struct {
 
 	// AWS リージョン
 	Region string `yaml:"region"`
+}
+
+// 環境変数からJSON形式の文字列を読み込み、指定された型にデコードする
+// 環境変数が設定されていない場合は nil を返し、デコードに失敗した場合はエラーを返す
+func loadJSONFromEnv(envKey string, target interface{}) error {
+	value := os.Getenv(envKey)
+	if value == "" {
+		return nil
+	}
+	return json.Unmarshal([]byte(value), target)
 }
 
 // 指定されたパス・環境変数から設定を読み込む
@@ -52,14 +67,44 @@ func LoadConfig(filePath string) (*Config, error) {
 	if region := os.Getenv("GENERATE_CONFIG_REGION"); region != "" {
 		config.GenerateConfig.Region = region
 	}
-	if tagsStr := os.Getenv("GENERATE_CONFIG_FIND_TAGS"); tagsStr != "" {
-		var tags map[string]string
-		// JSON形式の文字列をデコード
-		if err := json.Unmarshal([]byte(tagsStr), &tags); err != nil {
-			// デコードに失敗した場合は、エラーを返す
-			return nil, err
+
+	var findTags map[string]string
+	if err := loadJSONFromEnv("GENERATE_CONFIG_FIND_TAGS", &findTags); err != nil {
+		return nil, err
+	}
+	if findTags != nil {
+		config.GenerateConfig.FindTags = findTags
+	}
+
+	var checkTags map[string]string
+	if err := loadJSONFromEnv("GENERATE_CONFIG_CHECK_TAGS", &checkTags); err != nil {
+		return nil, err
+	}
+	if checkTags != nil {
+		config.GenerateConfig.CheckTags = checkTags
+	}
+
+	// 環境変数で instance_template を上書きする
+	var instanceTemplate interface{}
+	if err := loadJSONFromEnv("INSTANCE_TEMPLATE", &instanceTemplate); err != nil {
+		return nil, err
+	}
+	if instanceTemplate != nil {
+		config.InstanceTemplate = instanceTemplate
+	}
+
+	// 環境変数で other_configs を上書きする
+	var otherConfigs map[string]interface{}
+	if err := loadJSONFromEnv("OTHER_CONFIGS", &otherConfigs); err != nil {
+		return nil, err
+	}
+	if otherConfigs != nil {
+		if config.OtherConfigs == nil {
+			config.OtherConfigs = make(map[string]interface{})
 		}
-		config.GenerateConfig.FindTags = tags
+		for k, v := range otherConfigs {
+			config.OtherConfigs[k] = v
+		}
 	}
 
 	// 設定の検証

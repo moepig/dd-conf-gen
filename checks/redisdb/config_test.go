@@ -168,3 +168,108 @@ func TestLoadConfig_InvalidYAMLFile(t *testing.T) {
 	// Assert: エラーが返される
 	require.Error(t, err, "Expected error for invalid YAML file")
 }
+
+// テスト内容: CheckTags, InstanceTemplate, OtherConfigs を環境変数で上書きする
+// 期待する結果: 環境変数の値が優先され、Config 構造体に反映される
+func TestLoadConfig_OverrideCheckTagsInstanceTemplateAndOtherConfigs(t *testing.T) {
+	// Arrange: YAML ファイルと環境変数の準備
+	yamlContent := `
+generate_config:
+  region: "ap-northeast-1"
+  find_tags:
+    env: "test"
+  check_tags:
+    environment: "env"
+instance_template:
+  host: "localhost"
+  port: 6379
+init_config:
+  foo: "bar"
+`
+	filePath := createTempFile(t, yamlContent)
+	defer os.Remove(filePath)
+
+	t.Setenv("GENERATE_CONFIG_CHECK_TAGS", `{"team":"service","env":"environment"}`)
+	t.Setenv("INSTANCE_TEMPLATE", `{"host":"redis.example.com","port":6380,"ssl":true}`)
+	t.Setenv("OTHER_CONFIGS", `{"init_config":{"baz":"qux"},"new_key":"new_value"}`)
+
+	// Act: 設定の読み込み
+	config, err := LoadConfig(filePath)
+	require.NoError(t, err)
+
+	// Assert: 結果の検証
+	expectedCheckTags := map[string]string{"team": "service", "env": "environment"}
+	expectedInstanceTemplate := map[string]interface{}{
+		"host": "redis.example.com",
+		"port": float64(6380),
+		"ssl":  true,
+	}
+	expectedOtherConfigs := map[string]interface{}{
+		"init_config": map[string]interface{}{"baz": "qux"},
+		"new_key":     "new_value",
+	}
+
+	assert.Equal(t, expectedCheckTags, config.GenerateConfig.CheckTags)
+	assert.Equal(t, expectedInstanceTemplate, config.InstanceTemplate)
+	assert.Equal(t, expectedOtherConfigs, config.OtherConfigs)
+}
+
+// テスト内容: CheckTags に不正な JSON が設定された環境変数を読み込むケース
+// 期待する結果: エラーを返す
+func TestLoadConfig_InvalidJSONInCheckTags(t *testing.T) {
+	// Arrange
+	yamlContent := `
+generate_config:
+  region: "ap-northeast-1"
+`
+	filePath := createTempFile(t, yamlContent)
+	defer os.Remove(filePath)
+
+	t.Setenv("GENERATE_CONFIG_CHECK_TAGS", `{"invalid"}`)
+
+	// Act
+	_, err := LoadConfig(filePath)
+
+	// Assert
+	require.Error(t, err)
+}
+
+// テスト内容: InstanceTemplate に不正な JSON が設定された環境変数を読み込むケース
+// 期待する結果: エラーを返す
+func TestLoadConfig_InvalidJSONInInstanceTemplate(t *testing.T) {
+	// Arrange
+	yamlContent := `
+generate_config:
+  region: "ap-northeast-1"
+`
+	filePath := createTempFile(t, yamlContent)
+	defer os.Remove(filePath)
+
+	t.Setenv("INSTANCE_TEMPLATE", `{"invalid"}`)
+
+	// Act
+	_, err := LoadConfig(filePath)
+
+	// Assert
+	require.Error(t, err)
+}
+
+// テスト内容: OtherConfigs に不正な JSON が設定された環境変数を読み込むケース
+// 期待する結果: エラーを返す
+func TestLoadConfig_InvalidJSONInOtherConfigs(t *testing.T) {
+	// Arrange
+	yamlContent := `
+generate_config:
+  region: "ap-northeast-1"
+`
+	filePath := createTempFile(t, yamlContent)
+	defer os.Remove(filePath)
+
+	t.Setenv("OTHER_CONFIGS", `{"invalid"}`)
+
+	// Act
+	_, err := LoadConfig(filePath)
+
+	// Assert
+	require.Error(t, err)
+}
