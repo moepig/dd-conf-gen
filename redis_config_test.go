@@ -25,26 +25,32 @@ func createTempFile(t *testing.T, content string) string {
 // テスト内容: YAML ファイルからのみ設定を読み込む
 // 期待する結果: ファイルの内容が正しく Config 構造体にパースされる
 func TestLoadConfig_FromFileOnly(t *testing.T) {
-
+	// Arrange: テスト用 YAML ファイルの作成
 	yamlContent := `
 generate_config:
   region: "ap-northeast-1"
-  tags:
+  find_tags:
     env: "test"
     service: "test-service"
+  check_tags:
+    environment: "env"
+    team: "service"
 other_key:
   foo: "bar"
 `
 	filePath := createTempFile(t, yamlContent)
 	defer os.Remove(filePath)
 
+	// Act: 設定の読み込み
 	config, err := LoadConfig(filePath)
 	require.NoError(t, err, "LoadConfig should not return an error")
 
+	// Assert: 結果の検証
 	expected := &Config{
 		GenerateConfig: GenerateConfig{
-			Region: "ap-northeast-1",
-			Tags:   map[string]string{"env": "test", "service": "test-service"},
+			Region:    "ap-northeast-1",
+			FindTags:  map[string]string{"env": "test", "service": "test-service"},
+			CheckTags: map[string]string{"environment": "env", "team": "service"},
 		},
 		OtherConfigs: map[string]interface{}{"other_key": map[string]interface{}{"foo": "bar"}},
 	}
@@ -55,11 +61,14 @@ other_key:
 // テスト内容: YAML ファイルの内容を環境変数で上書きする
 // 期待する結果: 環境変数の値が優先され、Config 構造体に反映される
 func TestLoadConfig_OverrideWithEnvironmentVariables(t *testing.T) {
+	// Arrange: YAML ファイルと環境変数の準備
 	yamlContent := `
 generate_config:
   region: "ap-northeast-1"
-  tags:
+  find_tags:
     env: "test"
+  check_tags:
+    environment: "env"
 other_key:
   foo: "bar"
 `
@@ -67,15 +76,18 @@ other_key:
 	defer os.Remove(filePath)
 
 	t.Setenv("GENERATE_CONFIG_REGION", "us-west-2")
-	t.Setenv("GENERATE_CONFIG_TAGS", `{"env":"prod","team":"backend"}`)
+	t.Setenv("GENERATE_CONFIG_FIND_TAGS", `{"env":"prod","team":"backend"}`)
 
+	// Act: 設定の読み込み
 	config, err := LoadConfig(filePath)
 	require.NoError(t, err)
 
+	// Assert: 結果の検証
 	expected := &Config{
 		GenerateConfig: GenerateConfig{
-			Region: "us-west-2",
-			Tags:   map[string]string{"env": "prod", "team": "backend"},
+			Region:    "us-west-2",
+			FindTags:  map[string]string{"env": "prod", "team": "backend"},
+			CheckTags: map[string]string{"environment": "env"},
 		},
 		OtherConfigs: map[string]interface{}{"other_key": map[string]interface{}{"foo": "bar"}},
 	}
@@ -86,56 +98,72 @@ other_key:
 // テスト内容: 環境変数からのみ設定を読み込む
 // 期待する結果: 環境変数の値が正しく Config 構造体にパースされる
 func TestLoadConfig_FromEnvironmentVariablesOnly(t *testing.T) {
+	// Arrange: 環境変数の設定
 	t.Setenv("GENERATE_CONFIG_REGION", "eu-central-1")
-	t.Setenv("GENERATE_CONFIG_TAGS", `{"team":"frontend"}`)
+	t.Setenv("GENERATE_CONFIG_FIND_TAGS", `{"team":"frontend"}`)
 
-	config, err := LoadConfig("") // ファイルパスを空にする
+	// Act: 設定の読み込み（ファイルパスを空にする）
+	config, err := LoadConfig("")
 	require.NoError(t, err)
 
+	// Assert: 結果の検証
 	expected := &Config{
 		GenerateConfig: GenerateConfig{
-			Region: "eu-central-1",
-			Tags:   map[string]string{"team": "frontend"},
+			Region:    "eu-central-1",
+			FindTags:  map[string]string{"team": "frontend"},
+			CheckTags: nil,
 		},
-		OtherConfigs: nil, // 明示的にnilであることを期待
+		OtherConfigs: nil,
 	}
 
 	assert.Equal(t, expected, config)
 }
 
-// テスト内容: tags に不正な JSON が設定された環境変数で読み込むケース
+// テスト内容: find_tags に不正な JSON が設定された環境変数を読み込むケース
 // 期待する結果: エラーを返す
 func TestLoadConfig_InvalidJSONInEnvironmentVariable(t *testing.T) {
+	// Arrange: 正しい YAML ファイルと不正な JSON 環境変数の準備
 	yamlContent := `
 generate_config:
-  tags:
+  find_tags:
     from: "file"
+  check_tags:
+    environment: "env"
 `
 	filePath := createTempFile(t, yamlContent)
 	defer os.Remove(filePath)
 
-	t.Setenv("GENERATE_CONFIG_TAGS", `{"invalid"}`) // 不正なJSON
+	t.Setenv("GENERATE_CONFIG_FIND_TAGS", `{"invalid"}`)
 
+	// Act: 設定の読み込み
 	_, err := LoadConfig(filePath)
+
+	// Assert: エラーが返される
 	require.Error(t, err)
 }
 
 // テスト内容: 存在しないファイルパスを指定して読み込む
 // 期待する結果: エラーにならず、空の Config 構造体が返される
 func TestLoadConfig_FileNotFound(t *testing.T) {
+	// Arrange & Act: 存在しないファイルパスで設定を読み込む
 	config, err := LoadConfig("non-existent-file.yaml")
 	require.NoError(t, err, "LoadConfig should not return error for non-existent file")
 
+	// Assert: 空の Config 構造体が返される
 	assert.Equal(t, &Config{}, config)
 }
 
 // テスト内容: 不正な形式の YAML ファイルを読み込む
 // 期待する結果: `yaml.Unmarshal` エラーが返される
 func TestLoadConfig_InvalidYAMLFile(t *testing.T) {
+	// Arrange: 不正な YAML ファイルの作成
 	yamlContent := "this: is: invalid: yaml"
 	filePath := createTempFile(t, yamlContent)
 	defer os.Remove(filePath)
 
+	// Act: 設定の読み込み
 	_, err := LoadConfig(filePath)
+
+	// Assert: エラーが返される
 	require.Error(t, err, "Expected error for invalid YAML file")
 }
