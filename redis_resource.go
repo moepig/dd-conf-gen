@@ -16,7 +16,8 @@ import (
 type RedisNode struct {
 	ClusterName string
 	ShardName   string
-	Endpoint    string
+	Host        string
+	Port        int
 	Tags        map[string]string
 }
 
@@ -119,11 +120,11 @@ func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.Repl
 			for _, member := range ng.NodeGroupMembers {
 				// 全てのノードのエンドポイントを取得（プライマリとレプリカ両方）
 				if member.ReadEndpoint != nil {
-					endpoint := fmt.Sprintf("%s:%d", *member.ReadEndpoint.Address, *member.ReadEndpoint.Port)
 					redisNodes = append(redisNodes, RedisNode{
 						ClusterName: clusterName,
 						ShardName:   shardName,
-						Endpoint:    endpoint,
+						Host:        *member.ReadEndpoint.Address,
+						Port:        int(*member.ReadEndpoint.Port),
 						Tags:        clusterTags,
 					})
 				}

@@ -256,7 +256,8 @@ func TestGetRedisNodesWithClients(t *testing.T) {
 	node := nodes[0]
 	assert.Equal(t, "my-cluster", node.ClusterName)
 	assert.Equal(t, "0001", node.ShardName)
-	assert.Equal(t, "my-cluster.abc123.0001.apne1.cache.amazonaws.com:6379", node.Endpoint)
+	assert.Equal(t, "my-cluster.abc123.0001.apne1.cache.amazonaws.com", node.Host)
+	assert.Equal(t, 6379, node.Port)
 	assert.Equal(t, map[string]string{"Environment": "production", "Team": "backend"}, node.Tags)
 
 	mockTaggingClient.AssertExpectations(t)
@@ -366,12 +367,14 @@ func TestGetRedisNodesWithClients_MultipleShards(t *testing.T) {
 
 	assert.Equal(t, "multi-shard-cluster", nodes[0].ClusterName)
 	assert.Equal(t, "0001", nodes[0].ShardName)
-	assert.Equal(t, "shard1.cache.amazonaws.com:6379", nodes[0].Endpoint)
+	assert.Equal(t, "shard1.cache.amazonaws.com", nodes[0].Host)
+	assert.Equal(t, 6379, nodes[0].Port)
 	assert.Equal(t, map[string]string{"Environment": "production", "App": "multi-shard"}, nodes[0].Tags)
 
 	assert.Equal(t, "multi-shard-cluster", nodes[1].ClusterName)
 	assert.Equal(t, "0002", nodes[1].ShardName)
-	assert.Equal(t, "shard2.cache.amazonaws.com:6379", nodes[1].Endpoint)
+	assert.Equal(t, "shard2.cache.amazonaws.com", nodes[1].Host)
+	assert.Equal(t, 6379, nodes[1].Port)
 	assert.Equal(t, map[string]string{"Environment": "production", "App": "multi-shard"}, nodes[1].Tags)
 
 	mockTaggingClient.AssertExpectations(t)
@@ -446,14 +449,15 @@ func TestGetRedisNodesWithClients_PrimaryAndReplicaNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, nodes, 2, "プライマリとレプリカの両方が返されるべき")
 
-	endpoints := []string{nodes[0].Endpoint, nodes[1].Endpoint}
-	assert.Contains(t, endpoints, "primary.cache.amazonaws.com:6379")
-	assert.Contains(t, endpoints, "replica.cache.amazonaws.com:6379")
+	hosts := []string{nodes[0].Host, nodes[1].Host}
+	assert.Contains(t, hosts, "primary.cache.amazonaws.com")
+	assert.Contains(t, hosts, "replica.cache.amazonaws.com")
 
 	expectedTags := map[string]string{"Environment": "production", "Service": "api"}
 	for _, node := range nodes {
 		assert.Equal(t, "test-cluster", node.ClusterName)
 		assert.Equal(t, "0001", node.ShardName)
+		assert.Equal(t, 6379, node.Port)
 		assert.Equal(t, expectedTags, node.Tags)
 	}
 
