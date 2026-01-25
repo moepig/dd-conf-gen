@@ -1,4 +1,4 @@
-package ddconfgen
+package redisdb
 
 import (
 	"testing"

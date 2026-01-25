@@ -1,4 +1,4 @@
-package ddconfgen
+package redisdb
 
 import (
 	"os"
@@ -125,6 +125,7 @@ func TestLoadConfig_InvalidJSONInEnvironmentVariable(t *testing.T) {
 	// Arrange: 正しい YAML ファイルと不正な JSON 環境変数の準備
 	yamlContent := `
 generate_config:
+  region: "ap-northeast-1"
   find_tags:
     from: "file"
   check_tags:
@@ -143,14 +144,14 @@ generate_config:
 }
 
 // テスト内容: 存在しないファイルパスを指定して読み込む
-// 期待する結果: エラーにならず、空の Config 構造体が返される
+// 期待する結果: region が設定されていないためエラーが返される
 func TestLoadConfig_FileNotFound(t *testing.T) {
 	// Arrange & Act: 存在しないファイルパスで設定を読み込む
-	config, err := LoadConfig("non-existent-file.yaml")
-	require.NoError(t, err, "LoadConfig should not return error for non-existent file")
+	_, err := LoadConfig("non-existent-file.yaml")
 
-	// Assert: 空の Config 構造体が返される
-	assert.Equal(t, &Config{}, config)
+	// Assert: region が必須のためエラーが返される
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "region is not specified")
 }
 
 // テスト内容: 不正な形式の YAML ファイルを読み込む

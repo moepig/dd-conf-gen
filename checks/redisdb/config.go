@@ -1,7 +1,8 @@
-package ddconfgen
+package redisdb
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -59,6 +60,11 @@ func LoadConfig(filePath string) (*Config, error) {
 			return nil, err
 		}
 		config.GenerateConfig.FindTags = tags
+	}
+
+	// 設定の検証
+	if config.GenerateConfig.Region == "" {
+		return nil, fmt.Errorf("region is not specified in config or environment variable")
 	}
 
 	return &config, nil
