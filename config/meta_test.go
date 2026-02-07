@@ -18,17 +18,12 @@ resources:
     filters:
       tags:
         env: Production
-    tag_mapping:
-      environment: env
 
 outputs:
   - template: templates/redis.yaml.tmpl
     output_file: /tmp/redisdb.yaml
     data:
       resource_name: production_redis
-      static:
-        username: "%%env_REDIS_USERNAME%%"
-        password: "%%env_REDIS_PASSWORD%%"
 `
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
@@ -223,9 +218,7 @@ resources:
 outputs:
   - template: test.tmpl
     output_file: /tmp/test.yaml
-    data:
-      static:
-        key: value
+    data: {}
 `,
 				expectedErr: "resource_name is required",
 			},
@@ -320,25 +313,12 @@ resources:
       other_filter:
         nested:
           key: value
-    tag_mapping:
-      env: Environment
-      team: Team
-      region: AWSRegion
 
 outputs:
   - template: templates/redis.yaml.tmpl
     output_file: /tmp/redisdb.yaml
     data:
       resource_name: complex_resource
-      static:
-        username: "%%env_REDIS_USERNAME%%"
-        password: "%%env_REDIS_PASSWORD%%"
-        tags:
-          - "custom:tag"
-          - "another:value"
-        nested:
-          deeply:
-            nested: value
 `
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
@@ -346,7 +326,5 @@ outputs:
 		cfg, err := LoadMetaConfig(tmpfile)
 		require.NoError(t, err)
 		assert.NotNil(t, cfg.Resources[0].Filters)
-		assert.NotNil(t, cfg.Resources[0].TagMapping)
-		assert.NotNil(t, cfg.Outputs[0].Data.Static)
 	})
 }

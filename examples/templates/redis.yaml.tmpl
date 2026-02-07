@@ -4,13 +4,14 @@ instances:
 {{- range .Resources }}
   - host: {{ .Host }}
     port: {{ .Port }}
-    username: {{ $.Static.username }}
-    password: {{ $.Static.password }}
+    username: "%%env_REDIS_USERNAME%%"
+    password: "%%env_REDIS_PASSWORD%%"
     tags:
-    {{- range $.Static.tags }}
-      - {{ . }}
+      - "instancetag:bar"
+    {{- if index .Tags "awsenv" }}
+      - env:{{ index .Tags "awsenv" }}
     {{- end }}
-    {{- range $key, $value := .Tags }}
-      - {{ $key }}:{{ $value }}
+    {{- if index .Tags "service" }}
+      - team:{{ index .Tags "service" }}
     {{- end }}
 {{- end }}

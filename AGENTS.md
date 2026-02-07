@@ -14,11 +14,13 @@
 
 ### 設定の組み立て
 
-- チェック設定で静的に与えたい内容は、このアプリケーションに読み込ませる YAML ファイルに記述しておく
-  - 静的に与えたい内容は、Datadog Agent のチェック設定ファイルと同一形式で記述する
-  - 形式のチェックは行わず、存在する要素を転記することで、同一形式による記述を実現する
-- リソース検索の動作に関する内容も、同一の YAML ファイルに `.generate_config` の子要素として記述しておく
-  - この要素はアプリケーションの制御にのみ使用され、最終的な設定ファイルには含まれない
+- チェック設定の生成には、メタ設定ファイルとテンプレートファイルの2つのファイルを使用する
+  - **メタ設定ファイル**: リソース検索の条件（リージョン、タグフィルター、タグマッピング）と出力定義を記述する
+  - **テンプレートファイル**: Datadog Agent のチェック設定の形式を Go の `text/template` 形式で記述する
+- メタ設定ファイルには、リソース定義（`resources`）と出力定義（`outputs`）を記述する
+  - リソース定義: どのクラウドリソースを検索するか（type, region, filters, tag_mapping）
+  - 出力定義: どのテンプレートを使って、どのファイルに出力するか（template, output_file, data）
+- テンプレートファイルには、発見されたリソース情報（`.Resources`）をループして、チェック設定を生成するロジックを記述する
 
 ### アプリケーション設定
 
@@ -26,43 +28,80 @@
 
 #### ElastiCache for Redis の場合
 
+**メタ設定ファイル (`meta-config.yaml`):**
+
 ```yaml
-generate_config:
-  region: ap-northeast-1
-  find_tags:
-    awsenv: Production
-    resourcetag1: foo
-  check_tags:
-    env: awsenv
+version: "1.0"
 
-instance_template:
-  username: "%%env_REDIS_USERNAME%%"
-  password: "%%env_REDIS_PASSWORD%%"
-  tags:
-    - "instancetag:bar"
+resources:
+  - name: production_redis_nodes
+    type: elasticache_redis
+    region: ap-northeast-1
+    filters:
+      tags:
+        awsenv: Production
+        resourcetag1: foo
 
-init_config:
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /etc/datadog-agent/conf.d/redisdb.yaml
+    data:
+      resource_name: production_redis_nodes
 ```
 
-生成される Datadog Agent チェック設定ファイルは以下のようになる。
+**テンプレートファイル (`templates/redis.yaml.tmpl`):**
 
 ```yaml
 init_config:
 
 instances:
-  host: endpoint1
-  port: 6379
-  username: "%%env_REDIS_USERNAME%%"
-  password: "%%env_REDIS_PASSWORD%%"
-  tags:
-    - "env:Production"
-    - "instancetag:bar"
+{{- range .Resources }}
+  - host: {{ .Host }}
+    port: {{ .Port }}
+    username: "%%env_REDIS_USERNAME%%"
+    password: "%%env_REDIS_PASSWORD%%"
+    tags:
+      - "instancetag:bar"
+    {{- if index .Tags "awsenv" }}
+      - env:{{ index .Tags "awsenv" }}
+    {{- end }}
+{{- end }}
+```
+
+**生成される Datadog Agent チェック設定ファイル:**
+
+```yaml
+init_config:
+
+instances:
+  - host: endpoint1.cache.amazonaws.com
+    port: 6379
+    username: "%%env_REDIS_USERNAME%%"
+    password: "%%env_REDIS_PASSWORD%%"
+    tags:
+      - "instancetag:bar"
+      - "env:Production"
 ```
 
 ### アプリケーションへの設定の与え方
 
-- オプション引数で生成対象のチェック構成の名前を受け取る、このオプションは必須
-- オプション引数でパスの与えられた設定ファイル、もしくは環境変数から、生成対象のチェック構成ごとの設定を読み込む
+- オプション引数 `-meta` でメタ設定ファイルのパスを受け取る、このオプションは必須
+- メタ設定ファイルには、リソース定義と出力定義を記述する
+- テンプレートファイルのパスは、メタ設定ファイルからの相対パスまたは絶対パスで指定する
+
+### アーキテクチャ
+
+- **プロバイダーアーキテクチャ**: リソース種別ごとに Provider インターフェースを実装することで、拡張可能な設計
+  - `resources/interface.go`: Provider インターフェースの定義
+  - `resources/elasticache/provider.go`: ElastiCache Redis の実装
+  - `resources/registry.go`: プロバイダーの登録・取得機構
+- **テンプレートレンダリング**: Go の `text/template` を使用して、柔軟な設定生成を実現
+  - `renderer/renderer.go`: テンプレートレンダリングエンジン
+- **メタ設定管理**: YAML 形式のメタ設定を読み込み、バリデーションを実施
+  - `config/meta.go`: メタ設定の読み込みとバリデーション
+  - `config/types.go`: メタ設定の型定義
+- **CLI**: 全体のオーケストレーションを担当
+  - `main.go`: プロバイダー登録、リソース検索、テンプレートレンダリング、ファイル書き込み
 
 ### テスト
 
@@ -82,3 +121,21 @@ instances:
 ### ライブラリの更新
 
 - ユニットテストが通った場合、自動でマージする
+
+### 新しいリソースプロバイダーの追加
+
+新しいリソース種別（例: RDS MySQL）を追加する場合：
+
+1. `resources/<provider_name>/` ディレクトリを作成（例: `resources/rds/`）
+2. `provider.go` を作成し、`resources.Provider` インターフェースを実装
+   - `Type() string`: リソース種別を返す（例: "rds_mysql"）
+   - `Discover(ctx, config) ([]resources.Resource, error)`: リソースを検索
+   - `ValidateConfig(config) error`: 設定をバリデーション
+3. `provider_test.go` を作成し、モックを使用したユニットテストを実装
+4. `main.go` の `init()` 関数でプロバイダーを登録
+   ```go
+   resources.Register(rds.NewProvider())
+   ```
+5. ドキュメント（README.md）にリソース種別の説明を追加
+
+詳細は `resources/elasticache/provider.go` を参照。

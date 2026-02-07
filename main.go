@@ -59,9 +59,8 @@ func run(ctx context.Context, metaPath string) error {
 		}
 
 		providerCfg := resources.ProviderConfig{
-			Region:     resCfg.Region,
-			Filters:    resCfg.Filters,
-			TagMapping: resCfg.TagMapping,
+			Region:  resCfg.Region,
+			Filters: resCfg.Filters,
 		}
 
 		discoveredResources, err := provider.Discover(ctx, providerCfg)
@@ -89,7 +88,6 @@ func run(ctx context.Context, metaPath string) error {
 		// Prepare template data
 		templateData := renderer.TemplateData{
 			Resources: discoveredResources,
-			Static:    outCfg.Data.Static,
 		}
 
 		// Resolve template path (relative to meta config file)

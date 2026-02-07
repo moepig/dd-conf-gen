@@ -9,11 +9,10 @@ type MetaConfig struct {
 
 // ResourceConfig represents a resource definition
 type ResourceConfig struct {
-	Name       string                 `yaml:"name"`
-	Type       string                 `yaml:"type"`
-	Region     string                 `yaml:"region"`
-	Filters    map[string]interface{} `yaml:"filters"`
-	TagMapping map[string]string      `yaml:"tag_mapping"`
+	Name    string                 `yaml:"name"`
+	Type    string                 `yaml:"type"`
+	Region  string                 `yaml:"region"`
+	Filters map[string]interface{} `yaml:"filters"`
 }
 
 // OutputConfig represents an output definition
@@ -25,6 +24,5 @@ type OutputConfig struct {
 
 // OutputData represents data passed to templates
 type OutputData struct {
-	ResourceName string                 `yaml:"resource_name"`
-	Static       map[string]interface{} `yaml:"static"`
+	ResourceName string `yaml:"resource_name"`
 }

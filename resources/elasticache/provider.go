@@ -121,15 +121,12 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 			return nil, fmt.Errorf("failed to describe replication group %s: %w", id, err)
 		}
 
-		// Get tags for this ARN
+		// Get tags for this ARN (pass all tags as-is)
 		arn := idToARN[id]
 		clusterTags := arnToTags[arn]
 
-		// Apply tag mapping
-		mappedTags := applyTagMapping(clusterTags, cfg.TagMapping)
-
 		// Extract nodes from replication groups
-		nodes := extractNodesFromReplicationGroups(resp.ReplicationGroups, id, mappedTags)
+		nodes := extractNodesFromReplicationGroups(resp.ReplicationGroups, id, clusterTags)
 		result = append(result, nodes...)
 	}
 
@@ -211,17 +208,6 @@ func extractReplicationGroupIDsFromARNs(arns []string) []string {
 		}
 	}
 	return replicationGroupIDs
-}
-
-// applyTagMapping applies tag mapping rules to convert AWS tags to Datadog tags
-func applyTagMapping(awsTags map[string]string, tagMapping map[string]string) map[string]string {
-	result := make(map[string]string)
-	for ddTag, awsTag := range tagMapping {
-		if value, exists := awsTags[awsTag]; exists {
-			result[ddTag] = value
-		}
-	}
-	return result
 }
 
 // extractNodesFromReplicationGroups extracts all nodes from replication groups

@@ -12,7 +12,6 @@ import (
 // TemplateData represents data passed to templates
 type TemplateData struct {
 	Resources []resources.Resource
-	Static    map[string]interface{}
 }
 
 // Renderer handles template rendering
