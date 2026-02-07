@@ -2,7 +2,6 @@ package config
 
 // GenConfig represents the entire generation configuration file
 type GenConfig struct {
-	Version   string           `yaml:"version"`
 	Resources []ResourceConfig `yaml:"resources"`
 	Outputs   []OutputConfig   `yaml:"outputs"`
 }

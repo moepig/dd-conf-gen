@@ -28,10 +28,6 @@ func LoadGenConfig(path string) (*GenConfig, error) {
 
 // validateGenConfig validates the generation configuration
 func validateGenConfig(cfg *GenConfig) error {
-	if cfg.Version == "" {
-		return fmt.Errorf("version is required")
-	}
-
 	if len(cfg.Resources) == 0 {
 		return fmt.Errorf("at least one resource must be defined")
 	}

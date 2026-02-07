@@ -34,11 +34,10 @@ dd-conf-gen -config gen-config.yaml
 
 #### トップレベル項目
 
-| 項目        | 型     | 必須 | 説明                                       |
-| ----------- | ------ | ---- | ------------------------------------------ |
-| `version`   | string | ○    | 設定ファイルのバージョン（現在は `"1.0"`） |
-| `resources` | array  | ○    | リソース定義のリスト（最低1つ必要）        |
-| `outputs`   | array  | ○    | 出力定義のリスト（最低1つ必要）            |
+| 項目        | 型    | 必須 | 説明                                |
+| ----------- | ----- | ---- | ----------------------------------- |
+| `resources` | array | ○    | リソース定義のリスト（最低1つ必要） |
+| `outputs`   | array | ○    | 出力定義のリスト（最低1つ必要）     |
 
 #### resources 項目
 
@@ -66,8 +65,6 @@ dd-conf-gen -config gen-config.yaml
 #### 設定例
 
 ```yaml
-version: "1.0"
-
 resources:
   - name: production_redis_nodes
     type: elasticache_redis

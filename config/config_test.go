@@ -10,8 +10,7 @@ import (
 
 func TestLoadGenConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
-		content := `version: "1.0"
-resources:
+		content := `resources:
   - name: production_redis
     type: elasticache_redis
     region: ap-northeast-1
@@ -30,7 +29,6 @@ outputs:
 
 		cfg, err := LoadGenConfig(tmpfile)
 		require.NoError(t, err)
-		assert.Equal(t, "1.0", cfg.Version)
 		assert.Len(t, cfg.Resources, 1)
 		assert.Len(t, cfg.Outputs, 1)
 		assert.Equal(t, "production_redis", cfg.Resources[0].Name)
@@ -39,28 +37,8 @@ outputs:
 		assert.Equal(t, "production_redis", cfg.Outputs[0].Data.ResourceName)
 	})
 
-	t.Run("missing version", func(t *testing.T) {
-		content := `resources:
-  - name: test
-    type: test_type
-    region: us-east-1
-outputs:
-  - template: test.tmpl
-    output_file: /tmp/test.yaml
-    data:
-      resource_name: test
-`
-		tmpfile := createTempFile(t, content)
-		defer os.Remove(tmpfile)
-
-		_, err := LoadGenConfig(tmpfile)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "version is required")
-	})
-
 	t.Run("missing resources", func(t *testing.T) {
-		content := `version: "1.0"
-outputs:
+		content := `outputs:
   - template: test.tmpl
     output_file: /tmp/test.yaml
     data:
@@ -75,8 +53,7 @@ outputs:
 	})
 
 	t.Run("missing outputs", func(t *testing.T) {
-		content := `version: "1.0"
-resources:
+		content := `resources:
   - name: test
     type: test_type
     region: us-east-1
@@ -90,8 +67,7 @@ resources:
 	})
 
 	t.Run("duplicate resource name", func(t *testing.T) {
-		content := `version: "1.0"
-resources:
+		content := `resources:
   - name: duplicate
     type: type1
     region: us-east-1
@@ -113,8 +89,7 @@ outputs:
 	})
 
 	t.Run("invalid resource reference", func(t *testing.T) {
-		content := `version: "1.0"
-resources:
+		content := `resources:
   - name: existing_resource
     type: test_type
     region: us-east-1
@@ -140,8 +115,7 @@ outputs:
 		}{
 			{
 				name: "missing resource name",
-				content: `version: "1.0"
-resources:
+				content: `resources:
   - type: test_type
     region: us-east-1
 outputs:
@@ -154,8 +128,7 @@ outputs:
 			},
 			{
 				name: "missing resource type",
-				content: `version: "1.0"
-resources:
+				content: `resources:
   - name: test
     region: us-east-1
 outputs:
@@ -168,8 +141,7 @@ outputs:
 			},
 			{
 				name: "missing resource region",
-				content: `version: "1.0"
-resources:
+				content: `resources:
   - name: test
     type: test_type
 outputs:
@@ -182,8 +154,7 @@ outputs:
 			},
 			{
 				name: "missing output template",
-				content: `version: "1.0"
-resources:
+				content: `resources:
   - name: test
     type: test_type
     region: us-east-1
@@ -196,8 +167,7 @@ outputs:
 			},
 			{
 				name: "missing output file",
-				content: `version: "1.0"
-resources:
+				content: `resources:
   - name: test
     type: test_type
     region: us-east-1
@@ -210,8 +180,7 @@ outputs:
 			},
 			{
 				name: "missing output resource_name",
-				content: `version: "1.0"
-resources:
+				content: `resources:
   - name: test
     type: test_type
     region: us-east-1
@@ -265,7 +234,6 @@ func createTempFile(t *testing.T, content string) string {
 func TestValidateGenConfig(t *testing.T) {
 	t.Run("valid config with multiple resources and outputs", func(t *testing.T) {
 		cfg := &GenConfig{
-			Version: "1.0",
 			Resources: []ResourceConfig{
 				{
 					Name:   "redis1",
@@ -301,8 +269,7 @@ func TestValidateGenConfig(t *testing.T) {
 	})
 
 	t.Run("complex filters and tag mapping", func(t *testing.T) {
-		content := `version: "1.0"
-resources:
+		content := `resources:
   - name: complex_resource
     type: elasticache_redis
     region: ap-northeast-1
