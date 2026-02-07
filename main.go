@@ -22,11 +22,27 @@ func init() {
 func main() {
 	// Command line arguments
 	configPath := flag.String("config", "", "Path to generation configuration file")
+	logLevelStr := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	flag.Parse()
 
+	// Parse log level
+	var logLevel slog.Level
+	switch *logLevelStr {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	default:
+		fmt.Fprintf(os.Stderr, "Error: invalid log level '%s' (must be debug, info, warn, or error)\n", *logLevelStr)
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	// Initialize slog logger
-	logLevel := new(slog.LevelVar)
-	logLevel.Set(slog.LevelInfo)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: logLevel,
 	}))
