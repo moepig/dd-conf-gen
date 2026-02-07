@@ -3,6 +3,7 @@ package elasticache
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -63,11 +64,14 @@ func (p *Provider) ValidateConfig(cfg resources.ProviderConfig) error {
 
 // Discover retrieves ElastiCache Redis resources based on the configuration
 func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) ([]resources.Resource, error) {
+	slog.Debug("Starting ElastiCache Redis discovery", "region", cfg.Region)
+
 	if err := p.ValidateConfig(cfg); err != nil {
 		return nil, err
 	}
 
 	// Load AWS config
+	slog.Debug("Loading AWS configuration", "region", cfg.Region)
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.Region))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
@@ -83,6 +87,7 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 
 	// Extract tag filters from config
 	tags := extractTagFilters(cfg.Filters)
+	slog.Debug("Extracted tag filters", "tag_count", len(tags), "tags", tags)
 
 	// Get replication groups by tags
 	resourceTagMappings, err := p.getReplicationGroupsByTags(ctx, tags)
@@ -91,8 +96,11 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 	}
 
 	if len(resourceTagMappings) == 0 {
+		slog.Info("No replication groups found matching tag filters", "tags", tags)
 		return []resources.Resource{}, nil
 	}
+
+	slog.Info("Found replication groups by tags", "count", len(resourceTagMappings))
 
 	// Build ARN to tags map
 	arnToTags := buildARNToTagsMap(resourceTagMappings)
@@ -103,6 +111,7 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 		replicationGroupARNs = append(replicationGroupARNs, *mapping.ResourceARN)
 	}
 	replicationGroupIDs := extractReplicationGroupIDsFromARNs(replicationGroupARNs)
+	slog.Debug("Extracted replication group IDs", "ids", replicationGroupIDs)
 
 	// Build ID to ARN map
 	idToARN := make(map[string]string)
@@ -113,6 +122,8 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 	// Describe replication groups and extract nodes
 	var result []resources.Resource
 	for _, id := range replicationGroupIDs {
+		slog.Debug("Describing replication group", "replication_group_id", id)
+
 		descInput := &elasticache.DescribeReplicationGroupsInput{
 			ReplicationGroupId: aws.String(id),
 		}
@@ -121,15 +132,28 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 			return nil, fmt.Errorf("failed to describe replication group %s: %w", id, err)
 		}
 
+		if len(resp.ReplicationGroups) == 0 {
+			slog.Warn("No replication group details found", "replication_group_id", id)
+			continue
+		}
+
+		slog.Debug("Retrieved replication group details",
+			"replication_group_id", id,
+			"node_groups_count", len(resp.ReplicationGroups[0].NodeGroups))
+
 		// Get tags for this ARN (pass all tags as-is)
 		arn := idToARN[id]
 		clusterTags := arnToTags[arn]
 
 		// Extract nodes from replication groups
 		nodes := extractNodesFromReplicationGroups(resp.ReplicationGroups, id, clusterTags)
+		slog.Debug("Extracted nodes from replication group",
+			"replication_group_id", id,
+			"nodes_count", len(nodes))
 		result = append(result, nodes...)
 	}
 
+	slog.Info("ElastiCache Redis discovery completed", "total_nodes", len(result))
 	return result, nil
 }
 
@@ -156,6 +180,9 @@ func extractTagFilters(filters map[string]interface{}) map[string]string {
 // getReplicationGroupsByTags retrieves replication groups filtered by tags
 func (p *Provider) getReplicationGroupsByTags(ctx context.Context, tags map[string]string) ([]taggingtypes.ResourceTagMapping, error) {
 	tagFilters := buildTagFilters(tags)
+	slog.Debug("Calling GetResources API",
+		"resource_type", "elasticache:replicationgroup",
+		"tag_filters_count", len(tagFilters))
 
 	input := &resourcegroupstaggingapi.GetResourcesInput{
 		ResourceTypeFilters: []string{"elasticache:replicationgroup"},
@@ -164,7 +191,21 @@ func (p *Provider) getReplicationGroupsByTags(ctx context.Context, tags map[stri
 
 	output, err := p.taggingClient.GetResources(ctx, input, nil)
 	if err != nil {
+		slog.Error("GetResources API call failed", "error", err)
 		return nil, fmt.Errorf("failed to get resources by tags: %w", err)
+	}
+
+	slog.Debug("GetResources API call succeeded", "resources_count", len(output.ResourceTagMappingList))
+
+	// Log the ARNs of found resources
+	if len(output.ResourceTagMappingList) > 0 {
+		arns := make([]string, 0, len(output.ResourceTagMappingList))
+		for _, mapping := range output.ResourceTagMappingList {
+			if mapping.ResourceARN != nil {
+				arns = append(arns, *mapping.ResourceARN)
+			}
+		}
+		slog.Debug("Found resource ARNs", "arns", arns)
 	}
 
 	return output.ResourceTagMappingList, nil
@@ -215,8 +256,15 @@ func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.Repl
 	var result []resources.Resource
 
 	for _, rg := range replicationGroups {
+		slog.Debug("Processing replication group",
+			"replication_group_id", aws.ToString(rg.ReplicationGroupId),
+			"node_groups_count", len(rg.NodeGroups))
+
 		for _, ng := range rg.NodeGroups {
 			shardName := *ng.NodeGroupId
+			slog.Debug("Processing node group",
+				"node_group_id", shardName,
+				"members_count", len(ng.NodeGroupMembers))
 
 			for _, member := range ng.NodeGroupMembers {
 				// Get all node endpoints (both primary and replica)
@@ -236,7 +284,18 @@ func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.Repl
 							"IsPrimary":   isPrimary,
 						},
 					}
+
+					slog.Debug("Extracted node",
+						"host", resource.Host,
+						"port", resource.Port,
+						"is_primary", isPrimary,
+						"shard", shardName)
+
 					result = append(result, resource)
+				} else {
+					slog.Warn("Node member has no read endpoint",
+						"node_group_id", shardName,
+						"cache_cluster_id", aws.ToString(member.CacheClusterId))
 				}
 			}
 		}
