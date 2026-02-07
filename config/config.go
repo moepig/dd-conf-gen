@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -14,10 +15,14 @@ func LoadGenConfig(path string) (*GenConfig, error) {
 		return nil, fmt.Errorf("failed to read generation config file: %w", err)
 	}
 
+	slog.Debug("Read generation config file", "path", path, "content", string(data))
+
 	var cfg GenConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse generation config: %w", err)
 	}
+
+	slog.Debug("Parsed generation config", "resources_count", len(cfg.Resources), "outputs_count", len(cfg.Outputs))
 
 	if err := validateGenConfig(&cfg); err != nil {
 		return nil, fmt.Errorf("invalid generation config: %w", err)

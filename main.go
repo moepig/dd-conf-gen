@@ -91,6 +91,8 @@ func run(ctx context.Context, configPath string) error {
 			Filters: resCfg.Filters,
 		}
 
+		slog.Debug("Provider config", "region", providerCfg.Region, "filters", providerCfg.Filters)
+
 		discoveredResources, err := provider.Discover(ctx, providerCfg)
 		if err != nil {
 			return fmt.Errorf("failed to discover resources for '%s': %w", resCfg.Name, err)
@@ -100,6 +102,7 @@ func run(ctx context.Context, configPath string) error {
 		slog.Info("Found resources",
 			"name", resCfg.Name,
 			"count", len(discoveredResources))
+		slog.Debug("Resource details", "name", resCfg.Name, "resources", discoveredResources)
 	}
 
 	// Render templates and write output files
@@ -132,6 +135,8 @@ func run(ctx context.Context, configPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to render template for '%s': %w", outCfg.OutputFile, err)
 		}
+
+		slog.Debug("Rendered output", "output_file", outCfg.OutputFile, "content", string(output))
 
 		// Create output directory if needed
 		outDir := filepath.Dir(outCfg.OutputFile)
