@@ -74,15 +74,21 @@ func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) (
 	slog.Debug("Loading AWS configuration", "region", cfg.Region)
 	awsCfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.Region))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+		return nil, fmt.Errorf("failed to load AWS config: %w (check AWS credentials and configuration)", err)
 	}
 
 	// Initialize clients if not set (for testing, they can be injected)
 	if p.taggingClient == nil {
 		p.taggingClient = resourcegroupstaggingapi.NewFromConfig(awsCfg)
+		if p.taggingClient == nil {
+			return nil, fmt.Errorf("failed to create Resource Groups Tagging API client")
+		}
 	}
 	if p.elasticacheClient == nil {
 		p.elasticacheClient = elasticache.NewFromConfig(awsCfg)
+		if p.elasticacheClient == nil {
+			return nil, fmt.Errorf("failed to create ElastiCache client")
+		}
 	}
 
 	// Extract tag filters from config
@@ -119,6 +125,11 @@ func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) (
 		idToARN[replicationGroupIDs[i]] = arn
 	}
 
+	// Ensure elasticache client is initialized
+	if p.elasticacheClient == nil {
+		return nil, fmt.Errorf("elasticache client is not initialized")
+	}
+
 	// Describe replication groups and extract nodes
 	var result []providers.Resource
 	for _, id := range replicationGroupIDs {
@@ -127,7 +138,19 @@ func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) (
 		descInput := &elasticache.DescribeReplicationGroupsInput{
 			ReplicationGroupId: aws.String(id),
 		}
-		resp, err := p.elasticacheClient.DescribeReplicationGroups(ctx, descInput)
+
+		// Catch panic and convert to error
+		var resp *elasticache.DescribeReplicationGroupsOutput
+		var err error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("panic occurred during DescribeReplicationGroups API call: %v", r)
+				}
+			}()
+			resp, err = p.elasticacheClient.DescribeReplicationGroups(ctx, descInput)
+		}()
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to describe replication group %s: %w", id, err)
 		}
@@ -179,6 +202,11 @@ func extractTagFilters(filters map[string]interface{}) map[string]string {
 
 // getReplicationGroupsByTags retrieves replication groups filtered by tags
 func (p *Provider) getReplicationGroupsByTags(ctx context.Context, tags map[string]string) ([]taggingtypes.ResourceTagMapping, error) {
+	// Ensure tagging client is initialized
+	if p.taggingClient == nil {
+		return nil, fmt.Errorf("tagging client is not initialized")
+	}
+
 	tagFilters := buildTagFilters(tags)
 	slog.Debug("Calling GetResources API",
 		"resource_type", "elasticache:replicationgroup",
@@ -189,9 +217,19 @@ func (p *Provider) getReplicationGroupsByTags(ctx context.Context, tags map[stri
 		TagFilters:          tagFilters,
 	}
 
-	output, err := p.taggingClient.GetResources(ctx, input, nil)
+	// Catch panic and convert to error
+	var output *resourcegroupstaggingapi.GetResourcesOutput
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic occurred during GetResources API call: %v", r)
+			}
+		}()
+		output, err = p.taggingClient.GetResources(ctx, input)
+	}()
+
 	if err != nil {
-		slog.Error("GetResources API call failed", "error", err)
 		return nil, fmt.Errorf("failed to get resources by tags: %w", err)
 	}
 
