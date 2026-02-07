@@ -48,7 +48,6 @@ dd-conf-gen -config gen-config.yaml
 | `name`         | string | ○    | リソースの識別子（outputs から参照される）            |
 | `type`         | string | ○    | リソースプロバイダーの種別（例: `elasticache_redis`） |
 | `region`       | string | ○    | AWS リージョン（例: `ap-northeast-1`）                |
-| `filters`      | map    | -    | リソースのフィルター条件（プロバイダー固有）          |
 | `filters.tags` | map    | -    | タグによるフィルタリング（key-value のペア）          |
 
 #### outputs 項目
@@ -59,7 +58,6 @@ dd-conf-gen -config gen-config.yaml
 | -------------------- | ------ | ---- | ---------------------------------------------------- |
 | `template`           | string | ○    | テンプレートファイルのパス（相対パスまたは絶対パス） |
 | `output_file`        | string | ○    | 出力先ファイルのパス                                 |
-| `data`               | map    | ○    | テンプレートに渡すデータ                             |
 | `data.resource_name` | string | ○    | 使用するリソースの識別子（resources の name を参照） |
 
 #### 設定例
