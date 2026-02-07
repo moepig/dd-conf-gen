@@ -28,116 +28,85 @@ go build -o dd-conf-gen
 dd-conf-gen -config gen-config.yaml
 ```
 
-### 生成設定ファイル
+### 生成設定ファイルの構造
 
-生成設定ファイルは YAML 形式で、リソース定義と出力定義を記述します。
+生成設定ファイルは YAML 形式で記述します。
 
-**例: `gen-config.yaml`**
+#### トップレベル項目
+
+| 項目        | 型     | 必須 | 説明                                       |
+| ----------- | ------ | ---- | ------------------------------------------ |
+| `version`   | string | ○    | 設定ファイルのバージョン（現在は `"1.0"`） |
+| `resources` | array  | ○    | リソース定義のリスト（最低1つ必要）        |
+| `outputs`   | array  | ○    | 出力定義のリスト（最低1つ必要）            |
+
+#### resources 項目
+
+各リソース定義には以下の項目を指定します:
+
+| 項目           | 型     | 必須 | 説明                                                  |
+| -------------- | ------ | ---- | ----------------------------------------------------- |
+| `name`         | string | ○    | リソースの識別子（outputs から参照される）            |
+| `type`         | string | ○    | リソースプロバイダーの種別（例: `elasticache_redis`） |
+| `region`       | string | ○    | AWS リージョン（例: `ap-northeast-1`）                |
+| `filters`      | map    | -    | リソースのフィルター条件（プロバイダー固有）          |
+| `filters.tags` | map    | -    | タグによるフィルタリング（key-value のペア）          |
+
+#### outputs 項目
+
+各出力定義には以下の項目を指定します:
+
+| 項目                 | 型     | 必須 | 説明                                                 |
+| -------------------- | ------ | ---- | ---------------------------------------------------- |
+| `template`           | string | ○    | テンプレートファイルのパス（相対パスまたは絶対パス） |
+| `output_file`        | string | ○    | 出力先ファイルのパス                                 |
+| `data`               | map    | ○    | テンプレートに渡すデータ                             |
+| `data.resource_name` | string | ○    | 使用するリソースの識別子（resources の name を参照） |
+
+#### 設定例
 
 ```yaml
 version: "1.0"
 
-# リソース定義（データソース）
 resources:
-  - name: production_redis_nodes # テンプレートから参照する識別子
-    type: elasticache_redis # リソースプロバイダーの種別
-    region: ap-northeast-1
-    filters:
-      tags:
-        awsenv: Production
-        service: web
-
-# 出力定義（テンプレートと出力先）
-outputs:
-  - template: templates/redis.yaml.tmpl
-    output_file: /etc/datadog-agent/conf.d/redisdb.yaml
-    data:
-      resource_name: production_redis_nodes # resources セクションの name を参照
-```
-
-### Datadog チェック設定テンプレート
-
-Datadog チェック設定テンプレートは Go の `text/template` を使用します。
-
-**例: `templates/redis.yaml.tmpl`**
-
-```yaml
-init_config:
-
-instances:
-{{- range .Resources }}
-  - host: {{ .Host }}
-    port: {{ .Port }}
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
-    tags:
-      - "instancetag:bar"
-    {{- if index .Tags "awsenv" }}
-      - env:{{ index .Tags "awsenv" }}
-    {{- end }}
-    {{- if index .Tags "service" }}
-      - team:{{ index .Tags "service" }}
-    {{- end }}
-{{- end }}
-```
-
-**テンプレートで利用可能なデータ:**
-
-- `.Resources`: リソースプロバイダーから取得したリソースのスライス
-  - `.Host`: ホスト名
-  - `.Port`: ポート番号
-  - `.Tags`: リソースの全タグ（map[string]string）
-    - テンプレート内で条件分岐してタグをマッピングできます
-    - 例: `{{- if index .Tags "awsenv" }}` で特定のタグの存在確認
-  - `.Metadata`: リソース種別固有の追加データ（map[string]interface{}）
-
-## サポートしているリソース種別
-
-### elasticache_redis
-
-ElastiCache for Redis のレプリケーショングループを検索します。
-
-**利用可能なフィールド:**
-
-- `Host` (string): Redis エンドポイントのホスト名
-- `Port` (int): Redis のポート番号（通常 6379）
-- `Tags` (map[string]string): AWS リソースの全タグ（そのまま）
-  - テンプレート内で必要なタグを選択・マッピングできます
-- `Metadata["ClusterName"]` (string): レプリケーショングループ ID
-- `Metadata["ShardName"]` (string): ノードグループ ID
-- `Metadata["IsPrimary"]` (bool): プライマリノードかどうか
-
-**フィルター:**
-
-- `tags` (map[string]string): AWS リソースタグでフィルタリング
-
-**タグの扱い方:**
-
-`.Tags` にはリソースの全 AWS タグがそのまま渡されます。テンプレート内で条件分岐して、必要なタグを Datadog タグに変換します。
-
-**例:**
-
-```yaml
-resources:
-  - name: my_redis
+  - name: production_redis_nodes
     type: elasticache_redis
     region: ap-northeast-1
     filters:
       tags:
         Environment: Production
+        Service: api
+
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /etc/datadog-agent/conf.d/redisdb.yaml
+    data:
+      resource_name: production_redis_nodes
 ```
 
-**テンプレート例（タグのマッピング）:**
+詳細な設定例については、各リソースプロバイダーのドキュメントを参照してください。
 
-```yaml
-tags:
-{{- if index .Tags "Environment" }}
-  - env:{{ index .Tags "Environment" }}
-{{- end }}
-{{- if index .Tags "Team" }}
-  - team:{{ index .Tags "Team" }}
-{{- end }}
-```
+### テンプレートの基本
+
+Datadog チェック設定テンプレートは Go の `text/template` 形式で記述します。
+
+**テンプレートで利用可能なデータ:**
+
+- `.Resources`: リソースプロバイダーから取得したリソースのスライス
+  - `.Host`: ホスト名またはエンドポイント
+  - `.Port`: ポート番号
+  - `.Tags`: リソースのタグ（map[string]string）
+  - `.Metadata`: リソース種別固有の追加データ（map[string]interface{}）
+
+詳細な使い方は、各リソースプロバイダーのドキュメントを参照してください。
+
+## サポートしているリソースプロバイダー
+
+各リソースプロバイダーの詳細（取得できるデータ、設定例、テンプレート例）については、以下のドキュメントを参照してください:
+
+| リソース種別        | 説明                      | ドキュメント                                                       |
+| ------------------- | ------------------------- | ------------------------------------------------------------------ |
+| `elasticache_redis` | AWS ElastiCache for Redis | [resources/elasticache/README.md](resources/elasticache/README.md) |
 
 ## 開発
 
@@ -156,8 +125,16 @@ go test ./... -short -cover
 
 ### 新しいリソースプロバイダーの追加
 
-1. `resources/<provider_name>/` ディレクトリを作成
-2. `Provider` インターフェースを実装
-3. `main.go` の `init()` 関数でプロバイダーを登録
+新しいリソースプロバイダーを追加する場合は、CLAUDE.md の「新しいリソースプロバイダーの追加」セクションを参照してください。
 
-詳細は `resources/elasticache/provider.go` を参照してください。
+基本的な手順:
+
+1. `resources/<provider_name>/` ディレクトリを作成
+2. `resources.Provider` インターフェースを実装
+3. `main.go` の `init()` 関数でプロバイダーを登録
+4. ドキュメント（README.md）を作成
+
+実装の詳細は、既存の実装を参考にしてください:
+
+- [resources/elasticache/provider.go](resources/elasticache/provider.go) - 実装例
+- [resources/elasticache/README.md](resources/elasticache/README.md) - ドキュメント例
