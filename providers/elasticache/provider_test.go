@@ -354,6 +354,65 @@ func TestProvider_Discover(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "region is required")
 	})
+
+	t.Run("tagging client error", func(t *testing.T) {
+		mockTagging := new(MockResourceGroupsTaggingClient)
+		ctx := context.Background()
+
+		provider := NewProvider()
+		provider.taggingClient = mockTagging
+		provider.elasticacheClient = new(MockElastiCacheClient)
+
+		// Mock GetResources to return an error
+		mockTagging.On("GetResources", ctx, mock.Anything, mock.Anything).Return(nil, assert.AnError)
+
+		cfg := providers.ProviderConfig{
+			Region: "ap-northeast-1",
+			Filters: map[string]interface{}{
+				"tags": map[string]interface{}{
+					"Environment": "production",
+				},
+			},
+		}
+
+		_, err := provider.Discover(ctx, cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get resources by tags")
+
+		mockTagging.AssertExpectations(t)
+	})
+
+	t.Run("elasticache client error", func(t *testing.T) {
+		mockTagging := new(MockResourceGroupsTaggingClient)
+		mockElastiCache := new(MockElastiCacheClient)
+		ctx := context.Background()
+
+		provider := NewProvider()
+		provider.taggingClient = mockTagging
+		provider.elasticacheClient = mockElastiCache
+
+		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
+			ResourceTagMappingList: []taggingtypes.ResourceTagMapping{
+				{
+					ResourceARN: aws.String("arn:aws:elasticache:ap-northeast-1:123456789012:replicationgroup:my-cluster"),
+					Tags:        []taggingtypes.Tag{},
+				},
+			},
+		}
+		mockTagging.On("GetResources", ctx, mock.Anything, mock.Anything).Return(taggingOutput, nil)
+		mockElastiCache.On("DescribeReplicationGroups", ctx, mock.Anything, mock.Anything).Return(nil, assert.AnError)
+
+		cfg := providers.ProviderConfig{
+			Region: "ap-northeast-1",
+		}
+
+		_, err := provider.Discover(ctx, cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to describe replication group")
+
+		mockTagging.AssertExpectations(t)
+		mockElastiCache.AssertExpectations(t)
+	})
 }
 
 func TestExtractTagFilters(t *testing.T) {
