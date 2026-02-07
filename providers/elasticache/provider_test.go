@@ -9,7 +9,7 @@ import (
 	elasticachetypes "github.com/aws/aws-sdk-go-v2/service/elasticache/types"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	taggingtypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
-	"github.com/moepig/dd-conf-gen/resources"
+	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -50,7 +50,7 @@ func TestProvider_ValidateConfig(t *testing.T) {
 	provider := NewProvider()
 
 	t.Run("valid config", func(t *testing.T) {
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "us-east-1",
 		}
 		err := provider.ValidateConfig(cfg)
@@ -58,14 +58,14 @@ func TestProvider_ValidateConfig(t *testing.T) {
 	})
 
 	t.Run("missing region", func(t *testing.T) {
-		cfg := resources.ProviderConfig{}
+		cfg := providers.ProviderConfig{}
 		err := provider.ValidateConfig(cfg)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "region is required")
 	})
 
 	t.Run("valid with tags filter", func(t *testing.T) {
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "us-east-1",
 			Filters: map[string]interface{}{
 				"tags": map[string]interface{}{
@@ -78,7 +78,7 @@ func TestProvider_ValidateConfig(t *testing.T) {
 	})
 
 	t.Run("invalid tags filter type", func(t *testing.T) {
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "us-east-1",
 			Filters: map[string]interface{}{
 				"tags": "invalid",
@@ -137,7 +137,7 @@ func TestProvider_Discover(t *testing.T) {
 		}
 		mockElastiCache.On("DescribeReplicationGroups", ctx, mock.Anything, mock.Anything).Return(elasticacheOutput, nil)
 
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "ap-northeast-1",
 			Filters: map[string]interface{}{
 				"tags": map[string]interface{}{
@@ -177,7 +177,7 @@ func TestProvider_Discover(t *testing.T) {
 		}
 		mockTagging.On("GetResources", ctx, mock.Anything, mock.Anything).Return(taggingOutput, nil)
 
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "us-east-1",
 			Filters: map[string]interface{}{
 				"tags": map[string]interface{}{
@@ -250,7 +250,7 @@ func TestProvider_Discover(t *testing.T) {
 		}
 		mockElastiCache.On("DescribeReplicationGroups", ctx, mock.Anything, mock.Anything).Return(elasticacheOutput, nil)
 
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "ap-northeast-1",
 			Filters: map[string]interface{}{
 				"tags": map[string]interface{}{
@@ -321,7 +321,7 @@ func TestProvider_Discover(t *testing.T) {
 		}
 		mockElastiCache.On("DescribeReplicationGroups", ctx, mock.Anything, mock.Anything).Return(elasticacheOutput, nil)
 
-		cfg := resources.ProviderConfig{
+		cfg := providers.ProviderConfig{
 			Region: "ap-northeast-1",
 		}
 
@@ -348,7 +348,7 @@ func TestProvider_Discover(t *testing.T) {
 
 	t.Run("invalid config", func(t *testing.T) {
 		provider := NewProvider()
-		cfg := resources.ProviderConfig{}
+		cfg := providers.ProviderConfig{}
 
 		_, err := provider.Discover(context.Background(), cfg)
 		assert.Error(t, err)

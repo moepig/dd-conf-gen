@@ -6,12 +6,12 @@ import (
 	"os"
 	"text/template"
 
-	"github.com/moepig/dd-conf-gen/resources"
+	"github.com/moepig/dd-conf-gen/providers"
 )
 
 // TemplateData represents data passed to templates
 type TemplateData struct {
-	Resources []resources.Resource
+	Resources []providers.Resource
 }
 
 // Renderer handles template rendering

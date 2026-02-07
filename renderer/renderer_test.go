@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/moepig/dd-conf-gen/resources"
+	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{
+			Resources: []providers.Resource{
 				{
 					Host: "example.com",
 					Port: 6379,
@@ -60,7 +60,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{
+			Resources: []providers.Resource{
 				{
 					Host: "redis1.example.com",
 					Port: 6379,
@@ -98,7 +98,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{
+			Resources: []providers.Resource{
 				{
 					Host: "redis1.example.com",
 					Port: 6379,
@@ -139,7 +139,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{
+			Resources: []providers.Resource{
 				{
 					Host: "redis1.example.com",
 					Port: 6379,
@@ -172,7 +172,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{
+			Resources: []providers.Resource{
 				{Host: "redis1.example.com", Port: 6379},
 				{Host: "redis2.example.com", Port: 6379},
 				{Host: "redis3.example.com", Port: 6379},
@@ -202,7 +202,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{
+			Resources: []providers.Resource{
 				{
 					Host: "redis1.example.com",
 					Port: 6379,
@@ -274,7 +274,7 @@ instances:
 
 		renderer := NewRenderer("")
 		data := TemplateData{
-			Resources: []resources.Resource{},
+			Resources: []providers.Resource{},
 		}
 
 		result, err := renderer.Render(tmpfile, data)

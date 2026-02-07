@@ -12,12 +12,12 @@ import (
 	elasticachetypes "github.com/aws/aws-sdk-go-v2/service/elasticache/types"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	taggingtypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
-	"github.com/moepig/dd-conf-gen/resources"
+	"github.com/moepig/dd-conf-gen/providers"
 )
 
 const providerType = "elasticache_redis"
 
-// Provider implements the resources.Provider interface for ElastiCache Redis
+// Provider implements the providers.Provider interface for ElastiCache Redis
 type Provider struct {
 	elasticacheClient ElastiCacheAPI
 	taggingClient     ResourceGroupsTaggingAPI
@@ -44,7 +44,7 @@ func (p *Provider) Type() string {
 }
 
 // ValidateConfig checks if the provider configuration is valid
-func (p *Provider) ValidateConfig(cfg resources.ProviderConfig) error {
+func (p *Provider) ValidateConfig(cfg providers.ProviderConfig) error {
 	if cfg.Region == "" {
 		return fmt.Errorf("region is required")
 	}
@@ -63,7 +63,7 @@ func (p *Provider) ValidateConfig(cfg resources.ProviderConfig) error {
 }
 
 // Discover retrieves ElastiCache Redis resources based on the configuration
-func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) ([]resources.Resource, error) {
+func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
 	slog.Debug("Starting ElastiCache Redis discovery", "region", cfg.Region)
 
 	if err := p.ValidateConfig(cfg); err != nil {
@@ -97,7 +97,7 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 
 	if len(resourceTagMappings) == 0 {
 		slog.Info("No replication groups found matching tag filters", "tags", tags)
-		return []resources.Resource{}, nil
+		return []providers.Resource{}, nil
 	}
 
 	slog.Info("Found replication groups by tags", "count", len(resourceTagMappings))
@@ -120,7 +120,7 @@ func (p *Provider) Discover(ctx context.Context, cfg resources.ProviderConfig) (
 	}
 
 	// Describe replication groups and extract nodes
-	var result []resources.Resource
+	var result []providers.Resource
 	for _, id := range replicationGroupIDs {
 		slog.Debug("Describing replication group", "replication_group_id", id)
 
@@ -252,8 +252,8 @@ func extractReplicationGroupIDsFromARNs(arns []string) []string {
 }
 
 // extractNodesFromReplicationGroups extracts all nodes from replication groups
-func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.ReplicationGroup, clusterName string, tags map[string]string) []resources.Resource {
-	var result []resources.Resource
+func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.ReplicationGroup, clusterName string, tags map[string]string) []providers.Resource {
+	var result []providers.Resource
 
 	for _, rg := range replicationGroups {
 		slog.Debug("Processing replication group",
@@ -274,7 +274,7 @@ func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.Repl
 						isPrimary = true
 					}
 
-					resource := resources.Resource{
+					resource := providers.Resource{
 						Host: *member.ReadEndpoint.Address,
 						Port: int(*member.ReadEndpoint.Port),
 						Tags: tags,
