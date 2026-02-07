@@ -16,7 +16,6 @@ type Provider interface {
 
 // ProviderConfig represents configuration for a provider
 type ProviderConfig struct {
-	Region     string
-	Filters    map[string]interface{}
-	TagMapping map[string]string
+	Region  string
+	Filters map[string]interface{}
 }

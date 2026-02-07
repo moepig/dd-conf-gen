@@ -46,9 +46,6 @@ resources:
       tags:
         awsenv: Production
         service: web
-    tag_mapping:
-      env: awsenv # AWS タグ 'awsenv' を Datadog タグ 'env' にマッピング
-      team: service
 
 # 出力定義（テンプレートと出力先）
 outputs:
@@ -56,11 +53,6 @@ outputs:
     output_file: /etc/datadog-agent/conf.d/redisdb.yaml
     data:
       resource_name: production_redis_nodes # resources セクションの name を参照
-      static:
-        username: "%%env_REDIS_USERNAME%%"
-        password: "%%env_REDIS_PASSWORD%%"
-        tags:
-          - "instancetag:bar"
 ```
 
 ### テンプレートファイル
@@ -76,14 +68,15 @@ instances:
 {{- range .Resources }}
   - host: {{ .Host }}
     port: {{ .Port }}
-    username: {{ $.Static.username }}
-    password: {{ $.Static.password }}
+    username: "%%env_REDIS_USERNAME%%"
+    password: "%%env_REDIS_PASSWORD%%"
     tags:
-    {{- range $.Static.tags }}
-      - {{ . }}
+      - "instancetag:bar"
+    {{- if index .Tags "awsenv" }}
+      - env:{{ index .Tags "awsenv" }}
     {{- end }}
-    {{- range $key, $value := .Tags }}
-      - {{ $key }}:{{ $value }}
+    {{- if index .Tags "service" }}
+      - team:{{ index .Tags "service" }}
     {{- end }}
 {{- end }}
 ```
@@ -93,9 +86,10 @@ instances:
 - `.Resources`: リソースプロバイダーから取得したリソースのスライス
   - `.Host`: ホスト名
   - `.Port`: ポート番号
-  - `.Tags`: タグマッピング済みの Datadog タグ（map[string]string）
+  - `.Tags`: リソースの全タグ（map[string]string）
+    - テンプレート内で条件分岐してタグをマッピングできます
+    - 例: `{{- if index .Tags "awsenv" }}` で特定のタグの存在確認
   - `.Metadata`: リソース種別固有の追加データ（map[string]interface{}）
-- `.Static`: メタ設定の `outputs[].data.static` セクション
 
 ## サポートしているリソース種別
 
@@ -107,7 +101,8 @@ ElastiCache for Redis のレプリケーショングループを検索します�
 
 - `Host` (string): Redis エンドポイントのホスト名
 - `Port` (int): Redis のポート番号（通常 6379）
-- `Tags` (map[string]string): タグマッピング済みの Datadog タグ
+- `Tags` (map[string]string): AWS リソースの全タグ（そのまま）
+  - テンプレート内で必要なタグを選択・マッピングできます
 - `Metadata["ClusterName"]` (string): レプリケーショングループ ID
 - `Metadata["ShardName"]` (string): ノードグループ ID
 - `Metadata["IsPrimary"]` (bool): プライマリノードかどうか
@@ -116,10 +111,9 @@ ElastiCache for Redis のレプリケーショングループを検索します�
 
 - `tags` (map[string]string): AWS リソースタグでフィルタリング
 
-**タグマッピング:**
+**タグの扱い方:**
 
-- `tag_mapping` で AWS タグを Datadog タグにマッピング
-- 例: `{env: awsenv}` → AWS タグ `awsenv=Production` を `env:Production` に変換
+`.Tags` にはリソースの全 AWS タグがそのまま渡されます。テンプレート内で条件分岐して、必要なタグを Datadog タグに変換します。
 
 **例:**
 
@@ -131,8 +125,18 @@ resources:
     filters:
       tags:
         Environment: Production
-    tag_mapping:
-      env: Environment
+```
+
+**テンプレート例（タグのマッピング）:**
+
+```yaml
+tags:
+{{- if index .Tags "Environment" }}
+  - env:{{ index .Tags "Environment" }}
+{{- end }}
+{{- if index .Tags "Team" }}
+  - team:{{ index .Tags "Team" }}
+{{- end }}
 ```
 
 ## 開発

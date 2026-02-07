@@ -44,15 +44,15 @@ instances:
 		assert.Equal(t, expected, string(result))
 	})
 
-	t.Run("template with static data", func(t *testing.T) {
+	t.Run("template with hardcoded values", func(t *testing.T) {
 		templateContent := `init_config:
 
 instances:
 {{- range .Resources }}
   - host: {{ .Host }}
     port: {{ .Port }}
-    username: {{ $.Static.username }}
-    password: {{ $.Static.password }}
+    username: "%%env_REDIS_USERNAME%%"
+    password: "%%env_REDIS_PASSWORD%%"
 {{- end }}
 `
 		tmpfile := createTempFile(t, templateContent)
@@ -66,10 +66,6 @@ instances:
 					Port: 6379,
 				},
 			},
-			Static: map[string]interface{}{
-				"username": "%%env_REDIS_USERNAME%%",
-				"password": "%%env_REDIS_PASSWORD%%",
-			},
 		}
 
 		result, err := renderer.Render(tmpfile, data)
@@ -80,8 +76,8 @@ instances:
 instances:
   - host: redis1.example.com
     port: 6379
-    username: %%env_REDIS_USERNAME%%
-    password: %%env_REDIS_PASSWORD%%
+    username: "%%env_REDIS_USERNAME%%"
+    password: "%%env_REDIS_PASSWORD%%"
 `
 		assert.Equal(t, expected, string(result))
 	})
@@ -125,15 +121,14 @@ instances:
 		assert.Contains(t, resultStr, "team:backend")
 	})
 
-	t.Run("template with static tags and dynamic tags", func(t *testing.T) {
+	t.Run("template with hardcoded tags and dynamic tags", func(t *testing.T) {
 		templateContent := `instances:
 {{- range .Resources }}
   - host: {{ .Host }}
     port: {{ .Port }}
     tags:
-    {{- range $.Static.tags }}
-      - {{ . }}
-    {{- end }}
+      - "instancetag:bar"
+      - "custom:tag"
     {{- range $key, $value := .Tags }}
       - {{ $key }}:{{ $value }}
     {{- end }}
@@ -153,12 +148,6 @@ instances:
 					},
 				},
 			},
-			Static: map[string]interface{}{
-				"tags": []interface{}{
-					"instancetag:bar",
-					"custom:tag",
-				},
-			},
 		}
 
 		result, err := renderer.Render(tmpfile, data)
@@ -166,9 +155,9 @@ instances:
 
 		resultStr := string(result)
 		assert.Contains(t, resultStr, "- host: redis1.example.com")
-		assert.Contains(t, resultStr, "- instancetag:bar")
-		assert.Contains(t, resultStr, "- custom:tag")
-		assert.Contains(t, resultStr, "- env:production")
+		assert.Contains(t, resultStr, "instancetag:bar")
+		assert.Contains(t, resultStr, "custom:tag")
+		assert.Contains(t, resultStr, "env:production")
 	})
 
 	t.Run("multiple resources", func(t *testing.T) {

@@ -144,10 +144,6 @@ func TestProvider_Discover(t *testing.T) {
 					"Environment": "production",
 				},
 			},
-			TagMapping: map[string]string{
-				"env":  "Environment",
-				"team": "Team",
-			},
 		}
 
 		result, err := provider.Discover(ctx, cfg)
@@ -157,8 +153,8 @@ func TestProvider_Discover(t *testing.T) {
 		resource := result[0]
 		assert.Equal(t, "my-cluster.abc123.0001.apne1.cache.amazonaws.com", resource.Host)
 		assert.Equal(t, 6379, resource.Port)
-		assert.Equal(t, "production", resource.Tags["env"])
-		assert.Equal(t, "backend", resource.Tags["team"])
+		assert.Equal(t, "production", resource.Tags["Environment"])
+		assert.Equal(t, "backend", resource.Tags["Team"])
 		assert.Equal(t, "my-cluster", resource.Metadata["ClusterName"])
 		assert.Equal(t, "0001", resource.Metadata["ShardName"])
 		assert.Equal(t, true, resource.Metadata["IsPrimary"])
@@ -260,9 +256,6 @@ func TestProvider_Discover(t *testing.T) {
 				"tags": map[string]interface{}{
 					"env": "prod",
 				},
-			},
-			TagMapping: map[string]string{
-				"environment": "env",
 			},
 		}
 
@@ -452,50 +445,5 @@ func TestExtractReplicationGroupIDsFromARNs(t *testing.T) {
 		arns := []string{}
 		ids := extractReplicationGroupIDsFromARNs(arns)
 		assert.Len(t, ids, 0)
-	})
-}
-
-func TestApplyTagMapping(t *testing.T) {
-	t.Run("apply tag mapping", func(t *testing.T) {
-		awsTags := map[string]string{
-			"Environment": "production",
-			"Team":        "backend",
-			"Owner":       "john",
-		}
-		tagMapping := map[string]string{
-			"env":  "Environment",
-			"team": "Team",
-		}
-
-		result := applyTagMapping(awsTags, tagMapping)
-		assert.Len(t, result, 2)
-		assert.Equal(t, "production", result["env"])
-		assert.Equal(t, "backend", result["team"])
-		assert.NotContains(t, result, "Owner")
-	})
-
-	t.Run("missing AWS tags", func(t *testing.T) {
-		awsTags := map[string]string{
-			"Environment": "production",
-		}
-		tagMapping := map[string]string{
-			"env":  "Environment",
-			"team": "Team",
-		}
-
-		result := applyTagMapping(awsTags, tagMapping)
-		assert.Len(t, result, 1)
-		assert.Equal(t, "production", result["env"])
-		assert.NotContains(t, result, "team")
-	})
-
-	t.Run("empty tag mapping", func(t *testing.T) {
-		awsTags := map[string]string{
-			"Environment": "production",
-		}
-		tagMapping := map[string]string{}
-
-		result := applyTagMapping(awsTags, tagMapping)
-		assert.Len(t, result, 0)
 	})
 }
