@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -23,6 +24,14 @@ func main() {
 	configPath := flag.String("config", "", "Path to generation configuration file")
 	flag.Parse()
 
+	// Initialize slog logger
+	logLevel := new(slog.LevelVar)
+	logLevel.Set(slog.LevelInfo)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
+	slog.SetDefault(logger)
+
 	// Validate config option
 	if *configPath == "" {
 		fmt.Fprintln(os.Stderr, "Error: -config option is required")
@@ -34,24 +43,27 @@ func main() {
 
 	// Run the application
 	if err := run(ctx, *configPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		slog.Error("Application failed", "error", err)
 		os.Exit(1)
 	}
 }
 
 func run(ctx context.Context, configPath string) error {
 	// Load generation configuration
-	fmt.Fprintf(os.Stderr, "Loading generation configuration from %s...\n", configPath)
+	slog.Info("Loading generation configuration", "config_path", configPath)
 	genCfg, err := config.LoadGenConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load generation config: %w", err)
 	}
 
 	// Discover resources for each resource config
-	fmt.Fprintf(os.Stderr, "Discovering resources...\n")
+	slog.Info("Discovering resources")
 	resourceMap := make(map[string][]resources.Resource)
 	for _, resCfg := range genCfg.Resources {
-		fmt.Fprintf(os.Stderr, "  - Discovering %s (type: %s, region: %s)...\n", resCfg.Name, resCfg.Type, resCfg.Region)
+		slog.Info("Discovering resource",
+			"name", resCfg.Name,
+			"type", resCfg.Type,
+			"region", resCfg.Region)
 
 		provider, err := resources.Get(resCfg.Type)
 		if err != nil {
@@ -69,15 +81,17 @@ func run(ctx context.Context, configPath string) error {
 		}
 
 		resourceMap[resCfg.Name] = discoveredResources
-		fmt.Fprintf(os.Stderr, "    Found %d resource(s)\n", len(discoveredResources))
+		slog.Info("Found resources",
+			"name", resCfg.Name,
+			"count", len(discoveredResources))
 	}
 
 	// Render templates and write output files
-	fmt.Fprintf(os.Stderr, "Generating output files...\n")
+	slog.Info("Generating output files")
 	rend := renderer.NewRenderer("")
 
 	for _, outCfg := range genCfg.Outputs {
-		fmt.Fprintf(os.Stderr, "  - Rendering %s...\n", outCfg.OutputFile)
+		slog.Info("Rendering template", "output_file", outCfg.OutputFile)
 
 		// Get resources for this output
 		discoveredResources, ok := resourceMap[outCfg.Data.ResourceName]
@@ -116,9 +130,9 @@ func run(ctx context.Context, configPath string) error {
 			return fmt.Errorf("failed to write output file '%s': %w", outCfg.OutputFile, err)
 		}
 
-		fmt.Fprintf(os.Stderr, "    Written to %s\n", outCfg.OutputFile)
+		slog.Info("Written output file", "path", outCfg.OutputFile)
 	}
 
-	fmt.Fprintf(os.Stderr, "Done!\n")
+	slog.Info("Done!")
 	return nil
 }
