@@ -39,15 +39,15 @@ version: "1.0"
 
 # リソース定義（データソース）
 resources:
-  - name: production_redis_nodes  # テンプレートから参照する識別子
-    type: elasticache_redis       # リソースプロバイダーの種別
+  - name: production_redis_nodes # テンプレートから参照する識別子
+    type: elasticache_redis # リソースプロバイダーの種別
     region: ap-northeast-1
     filters:
       tags:
         awsenv: Production
         service: web
     tag_mapping:
-      env: awsenv      # AWS タグ 'awsenv' を Datadog タグ 'env' にマッピング
+      env: awsenv # AWS タグ 'awsenv' を Datadog タグ 'env' にマッピング
       team: service
 
 # 出力定義（テンプレートと出力先）
@@ -55,7 +55,7 @@ outputs:
   - template: templates/redis.yaml.tmpl
     output_file: /etc/datadog-agent/conf.d/redisdb.yaml
     data:
-      resource_name: production_redis_nodes  # resources セクションの name を参照
+      resource_name: production_redis_nodes # resources セクションの name を参照
       static:
         username: "%%env_REDIS_USERNAME%%"
         password: "%%env_REDIS_PASSWORD%%"
@@ -157,16 +157,3 @@ go test ./... -short -cover
 3. `main.go` の `init()` 関数でプロバイダーを登録
 
 詳細は `resources/elasticache/provider.go` を参照してください。
-
-## ライセンス
-
-MIT License
-
-## 貢献
-
-プルリクエストを歓迎します。大きな変更の場合は、まず issue を開いて変更内容を議論してください。
-
-## 参考
-
-- [Datadog Agent チェック設定](https://docs.datadoghq.com/ja/agent/guide/agent-configuration-files/)
-- [Go text/template](https://pkg.go.dev/text/template)
