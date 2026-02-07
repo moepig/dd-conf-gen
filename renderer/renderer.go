@@ -3,6 +3,7 @@ package renderer
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"text/template"
 
@@ -34,11 +35,15 @@ func (r *Renderer) Render(templatePath string, data TemplateData) ([]byte, error
 		return nil, fmt.Errorf("failed to read template file: %w", err)
 	}
 
+	slog.Debug("Read template file", "path", templatePath, "content", string(content))
+
 	// Parse template
 	tmpl, err := template.New("config").Parse(string(content))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
+
+	slog.Debug("Rendering template with data", "resources_count", len(data.Resources))
 
 	// Execute template
 	var buf bytes.Buffer
