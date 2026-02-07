@@ -31,8 +31,6 @@
 **生成設定ファイル (`gen-config.yaml`):**
 
 ```yaml
-version: "1.0"
-
 resources:
   - name: production_redis_nodes
     type: elasticache_redis
