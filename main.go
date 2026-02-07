@@ -20,12 +20,12 @@ func init() {
 
 func main() {
 	// Command line arguments
-	metaPath := flag.String("meta", "", "Path to meta configuration file")
+	configPath := flag.String("config", "", "Path to generation configuration file")
 	flag.Parse()
 
-	// Validate meta option
-	if *metaPath == "" {
-		fmt.Fprintln(os.Stderr, "Error: -meta option is required")
+	// Validate config option
+	if *configPath == "" {
+		fmt.Fprintln(os.Stderr, "Error: -config option is required")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -33,24 +33,24 @@ func main() {
 	ctx := context.Background()
 
 	// Run the application
-	if err := run(ctx, *metaPath); err != nil {
+	if err := run(ctx, *configPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, metaPath string) error {
-	// Load meta configuration
-	fmt.Fprintf(os.Stderr, "Loading meta configuration from %s...\n", metaPath)
-	metaCfg, err := config.LoadMetaConfig(metaPath)
+func run(ctx context.Context, configPath string) error {
+	// Load generation configuration
+	fmt.Fprintf(os.Stderr, "Loading generation configuration from %s...\n", configPath)
+	genCfg, err := config.LoadGenConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load meta config: %w", err)
+		return fmt.Errorf("failed to load generation config: %w", err)
 	}
 
 	// Discover resources for each resource config
 	fmt.Fprintf(os.Stderr, "Discovering resources...\n")
 	resourceMap := make(map[string][]resources.Resource)
-	for _, resCfg := range metaCfg.Resources {
+	for _, resCfg := range genCfg.Resources {
 		fmt.Fprintf(os.Stderr, "  - Discovering %s (type: %s, region: %s)...\n", resCfg.Name, resCfg.Type, resCfg.Region)
 
 		provider, err := resources.Get(resCfg.Type)
@@ -76,7 +76,7 @@ func run(ctx context.Context, metaPath string) error {
 	fmt.Fprintf(os.Stderr, "Generating output files...\n")
 	rend := renderer.NewRenderer("")
 
-	for _, outCfg := range metaCfg.Outputs {
+	for _, outCfg := range genCfg.Outputs {
 		fmt.Fprintf(os.Stderr, "  - Rendering %s...\n", outCfg.OutputFile)
 
 		// Get resources for this output
@@ -90,11 +90,11 @@ func run(ctx context.Context, metaPath string) error {
 			Resources: discoveredResources,
 		}
 
-		// Resolve template path (relative to meta config file)
+		// Resolve template path (relative to generation config file)
 		templatePath := outCfg.Template
 		if !filepath.IsAbs(templatePath) {
-			metaDir := filepath.Dir(metaPath)
-			templatePath = filepath.Join(metaDir, templatePath)
+			configDir := filepath.Dir(configPath)
+			templatePath = filepath.Join(configDir, templatePath)
 		}
 
 		// Render template
