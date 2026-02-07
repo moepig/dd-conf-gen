@@ -25,14 +25,14 @@ go build -o dd-conf-gen
 ### 基本的な使い方
 
 ```bash
-dd-conf-gen -meta meta-config.yaml
+dd-conf-gen -config gen-config.yaml
 ```
 
-### メタ設定ファイル
+### 生成設定ファイル
 
-メタ設定ファイルは YAML 形式で、リソース定義と出力定義を記述します。
+生成設定ファイルは YAML 形式で、リソース定義と出力定義を記述します。
 
-**例: `meta-config.yaml`**
+**例: `gen-config.yaml`**
 
 ```yaml
 version: "1.0"
@@ -55,9 +55,9 @@ outputs:
       resource_name: production_redis_nodes # resources セクションの name を参照
 ```
 
-### テンプレートファイル
+### Datadog チェック設定テンプレート
 
-テンプレートファイルは Go の `text/template` を使用します。
+Datadog チェック設定テンプレートは Go の `text/template` を使用します。
 
 **例: `templates/redis.yaml.tmpl`**
 

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoadMetaConfig(t *testing.T) {
+func TestLoadGenConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		content := `version: "1.0"
 resources:
@@ -28,7 +28,7 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		cfg, err := LoadMetaConfig(tmpfile)
+		cfg, err := LoadGenConfig(tmpfile)
 		require.NoError(t, err)
 		assert.Equal(t, "1.0", cfg.Version)
 		assert.Len(t, cfg.Resources, 1)
@@ -53,7 +53,7 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		_, err := LoadMetaConfig(tmpfile)
+		_, err := LoadGenConfig(tmpfile)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "version is required")
 	})
@@ -69,7 +69,7 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		_, err := LoadMetaConfig(tmpfile)
+		_, err := LoadGenConfig(tmpfile)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "at least one resource must be defined")
 	})
@@ -84,7 +84,7 @@ resources:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		_, err := LoadMetaConfig(tmpfile)
+		_, err := LoadGenConfig(tmpfile)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "at least one output must be defined")
 	})
@@ -107,7 +107,7 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		_, err := LoadMetaConfig(tmpfile)
+		_, err := LoadGenConfig(tmpfile)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate resource name")
 	})
@@ -127,7 +127,7 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		_, err := LoadMetaConfig(tmpfile)
+		_, err := LoadGenConfig(tmpfile)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "resource_name 'nonexistent_resource' not found")
 	})
@@ -229,7 +229,7 @@ outputs:
 				tmpfile := createTempFile(t, tc.content)
 				defer os.Remove(tmpfile)
 
-				_, err := LoadMetaConfig(tmpfile)
+				_, err := LoadGenConfig(tmpfile)
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedErr)
 			})
@@ -237,9 +237,9 @@ outputs:
 	})
 
 	t.Run("file not found", func(t *testing.T) {
-		_, err := LoadMetaConfig("/nonexistent/path/to/config.yaml")
+		_, err := LoadGenConfig("/nonexistent/path/to/config.yaml")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read meta config file")
+		assert.Contains(t, err.Error(), "failed to read generation config file")
 	})
 
 	t.Run("invalid yaml", func(t *testing.T) {
@@ -247,9 +247,9 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		_, err := LoadMetaConfig(tmpfile)
+		_, err := LoadGenConfig(tmpfile)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to parse meta config")
+		assert.Contains(t, err.Error(), "failed to parse generation config")
 	})
 }
 
@@ -262,9 +262,9 @@ func createTempFile(t *testing.T, content string) string {
 	return tmpfile.Name()
 }
 
-func TestValidateMetaConfig(t *testing.T) {
+func TestValidateGenConfig(t *testing.T) {
 	t.Run("valid config with multiple resources and outputs", func(t *testing.T) {
-		cfg := &MetaConfig{
+		cfg := &GenConfig{
 			Version: "1.0",
 			Resources: []ResourceConfig{
 				{
@@ -296,7 +296,7 @@ func TestValidateMetaConfig(t *testing.T) {
 			},
 		}
 
-		err := validateMetaConfig(cfg)
+		err := validateGenConfig(cfg)
 		assert.NoError(t, err)
 	})
 
@@ -323,7 +323,7 @@ outputs:
 		tmpfile := createTempFile(t, content)
 		defer os.Remove(tmpfile)
 
-		cfg, err := LoadMetaConfig(tmpfile)
+		cfg, err := LoadGenConfig(tmpfile)
 		require.NoError(t, err)
 		assert.NotNil(t, cfg.Resources[0].Filters)
 	})

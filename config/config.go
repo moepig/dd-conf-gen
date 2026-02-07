@@ -7,27 +7,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadMetaConfig loads and parses a meta configuration file
-func LoadMetaConfig(path string) (*MetaConfig, error) {
+// LoadGenConfig loads and parses a generation configuration file
+func LoadGenConfig(path string) (*GenConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read meta config file: %w", err)
+		return nil, fmt.Errorf("failed to read generation config file: %w", err)
 	}
 
-	var cfg MetaConfig
+	var cfg GenConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse meta config: %w", err)
+		return nil, fmt.Errorf("failed to parse generation config: %w", err)
 	}
 
-	if err := validateMetaConfig(&cfg); err != nil {
-		return nil, fmt.Errorf("invalid meta config: %w", err)
+	if err := validateGenConfig(&cfg); err != nil {
+		return nil, fmt.Errorf("invalid generation config: %w", err)
 	}
 
 	return &cfg, nil
 }
 
-// validateMetaConfig validates the meta configuration
-func validateMetaConfig(cfg *MetaConfig) error {
+// validateGenConfig validates the generation configuration
+func validateGenConfig(cfg *GenConfig) error {
 	if cfg.Version == "" {
 		return fmt.Errorf("version is required")
 	}

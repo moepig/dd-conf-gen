@@ -1,7 +1,7 @@
 package config
 
-// MetaConfig represents the entire meta configuration file
-type MetaConfig struct {
+// GenConfig represents the entire generation configuration file
+type GenConfig struct {
 	Version   string           `yaml:"version"`
 	Resources []ResourceConfig `yaml:"resources"`
 	Outputs   []OutputConfig   `yaml:"outputs"`
