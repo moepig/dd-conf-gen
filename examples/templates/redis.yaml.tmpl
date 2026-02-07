@@ -1,0 +1,16 @@
+init_config:
+
+instances:
+{{- range .Resources }}
+  - host: {{ .Host }}
+    port: {{ .Port }}
+    username: {{ $.Static.username }}
+    password: {{ $.Static.password }}
+    tags:
+    {{- range $.Static.tags }}
+      - {{ . }}
+    {{- end }}
+    {{- range $key, $value := .Tags }}
+      - {{ $key }}:{{ $value }}
+    {{- end }}
+{{- end }}

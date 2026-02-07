@@ -1,0 +1,26 @@
+version: "1.0"
+
+# リソース定義（データソース）
+resources:
+  - name: production_redis_nodes
+    type: elasticache_redis
+    region: ap-northeast-1
+    filters:
+      tags:
+        awsenv: Production
+        service: web
+    tag_mapping:
+      env: awsenv
+      team: service
+
+# 出力定義（テンプレートと出力先）
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /tmp/redisdb.yaml
+    data:
+      resource_name: production_redis_nodes
+      static:
+        username: "%%env_REDIS_USERNAME%%"
+        password: "%%env_REDIS_PASSWORD%%"
+        tags:
+          - "instancetag:bar"
