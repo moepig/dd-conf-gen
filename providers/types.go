@@ -1,4 +1,4 @@
-package resources
+package providers
 
 // Resource represents a discovered cloud resource
 type Resource struct {

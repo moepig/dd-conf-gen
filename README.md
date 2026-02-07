@@ -101,7 +101,7 @@ Datadog チェック設定テンプレートは Go の `text/template` 形式で
 
 | リソース種別        | 説明                      | ドキュメント                                                       |
 | ------------------- | ------------------------- | ------------------------------------------------------------------ |
-| `elasticache_redis` | AWS ElastiCache for Redis | [resources/elasticache/README.md](resources/elasticache/README.md) |
+| `elasticache_redis` | AWS ElastiCache for Redis | [providers/elasticache/README.md](providers/elasticache/README.md) |
 
 ## 開発
 
@@ -124,12 +124,12 @@ go test ./... -short -cover
 
 基本的な手順:
 
-1. `resources/<provider_name>/` ディレクトリを作成
-2. `resources.Provider` インターフェースを実装
+1. `providers/<provider_name>/` ディレクトリを作成
+2. `providers.Provider` インターフェースを実装
 3. `main.go` の `init()` 関数でプロバイダーを登録
 4. ドキュメント（README.md）を作成
 
 実装の詳細は、既存の実装を参考にしてください:
 
-- [resources/elasticache/provider.go](resources/elasticache/provider.go) - 実装例
-- [resources/elasticache/README.md](resources/elasticache/README.md) - ドキュメント例
+- [providers/elasticache/provider.go](providers/elasticache/provider.go) - 実装例
+- [providers/elasticache/README.md](providers/elasticache/README.md) - ドキュメント例

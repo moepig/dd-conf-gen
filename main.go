@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 
 	"github.com/moepig/dd-conf-gen/config"
+	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/providers/elasticache"
 	"github.com/moepig/dd-conf-gen/renderer"
-	"github.com/moepig/dd-conf-gen/resources"
-	"github.com/moepig/dd-conf-gen/resources/elasticache"
 )
 
 func init() {
 	// Register providers
-	resources.Register(elasticache.NewProvider())
+	providers.Register(elasticache.NewProvider())
 }
 
 func main() {
@@ -74,19 +74,19 @@ func run(ctx context.Context, configPath string) error {
 
 	// Discover resources for each resource config
 	slog.Info("Discovering resources")
-	resourceMap := make(map[string][]resources.Resource)
+	resourceMap := make(map[string][]providers.Resource)
 	for _, resCfg := range genCfg.Resources {
 		slog.Info("Discovering resource",
 			"name", resCfg.Name,
 			"type", resCfg.Type,
 			"region", resCfg.Region)
 
-		provider, err := resources.Get(resCfg.Type)
+		provider, err := providers.Get(resCfg.Type)
 		if err != nil {
 			return fmt.Errorf("failed to get provider for resource '%s': %w", resCfg.Name, err)
 		}
 
-		providerCfg := resources.ProviderConfig{
+		providerCfg := providers.ProviderConfig{
 			Region:  resCfg.Region,
 			Filters: resCfg.Filters,
 		}

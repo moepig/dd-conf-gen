@@ -90,9 +90,9 @@ instances:
 ### アーキテクチャ
 
 - **プロバイダーアーキテクチャ**: リソース種別ごとに Provider インターフェースを実装することで、拡張可能な設計
-  - `resources/interface.go`: Provider インターフェースの定義
-  - `resources/elasticache/provider.go`: ElastiCache Redis の実装
-  - `resources/registry.go`: プロバイダーの登録・取得機構
+  - `providers/interface.go`: Provider インターフェースの定義
+  - `providers/elasticache/provider.go`: ElastiCache Redis の実装
+  - `providers/registry.go`: プロバイダーの登録・取得機構
 - **テンプレートレンダリング**: Go の `text/template` を使用して、柔軟な設定生成を実現
   - `renderer/renderer.go`: テンプレートレンダリングエンジン
 - **生成設定管理**: YAML 形式の生成設定を読み込み、バリデーションを実施
@@ -124,16 +124,16 @@ instances:
 
 新しいリソース種別（例: RDS MySQL）を追加する場合：
 
-1. `resources/<provider_name>/` ディレクトリを作成（例: `resources/rds/`）
-2. `provider.go` を作成し、`resources.Provider` インターフェースを実装
+1. `providers/<provider_name>/` ディレクトリを作成（例: `providers/rds/`）
+2. `provider.go` を作成し、`providers.Provider` インターフェースを実装
    - `Type() string`: リソース種別を返す（例: "rds_mysql"）
-   - `Discover(ctx, config) ([]resources.Resource, error)`: リソースを検索
+   - `Discover(ctx, config) ([]providers.Resource, error)`: リソースを検索
    - `ValidateConfig(config) error`: 設定をバリデーション
 3. `provider_test.go` を作成し、モックを使用したユニットテストを実装
 4. `main.go` の `init()` 関数でプロバイダーを登録
    ```go
-   resources.Register(rds.NewProvider())
+   providers.Register(rds.NewProvider())
    ```
 5. ドキュメント（README.md）にリソース種別の説明を追加
 
-詳細は `resources/elasticache/provider.go` を参照。
+詳細は `providers/elasticache/provider.go` を参照。
