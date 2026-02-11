@@ -123,7 +123,8 @@ func TestProvider_Discover(t *testing.T) {
 							NodeGroupId: aws.String("0001"),
 							NodeGroupMembers: []elasticachetypes.NodeGroupMember{
 								{
-									CurrentRole: aws.String("primary"),
+									CacheClusterId: aws.String("my-cluster-0001-001"),
+									CurrentRole:    aws.String("primary"),
 									ReadEndpoint: &elasticachetypes.Endpoint{
 										Address: aws.String("my-cluster.abc123.0001.apne1.cache.amazonaws.com"),
 										Port:    aws.Int32(6379),
@@ -158,6 +159,7 @@ func TestProvider_Discover(t *testing.T) {
 		assert.Equal(t, "my-cluster", resource.Metadata["ClusterName"])
 		assert.Equal(t, "0001", resource.Metadata["ShardName"])
 		assert.Equal(t, true, resource.Metadata["IsPrimary"])
+		assert.Equal(t, "my-cluster-0001-001", resource.Metadata["CacheClusterID"])
 
 		mockTagging.AssertExpectations(t)
 		mockElastiCache.AssertExpectations(t)

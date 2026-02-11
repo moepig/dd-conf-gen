@@ -317,9 +317,10 @@ func extractNodesFromReplicationGroups(replicationGroups []elasticachetypes.Repl
 						Port: int(*member.ReadEndpoint.Port),
 						Tags: tags,
 						Metadata: map[string]interface{}{
-							"ClusterName": clusterName,
-							"ShardName":   shardName,
-							"IsPrimary":   isPrimary,
+							"ClusterName":    clusterName,
+							"ShardName":      shardName,
+							"IsPrimary":      isPrimary,
+							"CacheClusterID": aws.ToString(member.CacheClusterId),
 						},
 					}
 
