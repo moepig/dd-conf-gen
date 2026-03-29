@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.51.13
-	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.6
+	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.10
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )
