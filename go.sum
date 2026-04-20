@@ -16,8 +16,8 @@ github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7 h1:5EniKhL
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7/go.mod h1:x0nZssQ3qZSnIcePWLvcoFisRXJzcTVvYpAAdYX8+GI=
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.21 h1:c31//R3xgIJMSC8S6hEVq+38DcvUlgFY0FM6mSI5oto=
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.21/go.mod h1:r6+pf23ouCB718FUxaqzZdbpYFyDtehyZcmP5KL9FkA=
-github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.10 h1:/06ZTEMv78pKQyHCE8mCyTr0jqyB/SgEqNISV0cLpho=
-github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.10/go.mod h1:1U2gliqlvTuDukaKtoF9IvEC+rP2pb0b6c4f7s/INeQ=
+github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.11 h1:H+rP6r3xvF72rcATLBm+XAdjjxL+v5g+ka/gjJBvPao=
+github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.11/go.mod h1:1orx2HYtb6hJEmD1o/OID8vWD5sBKxB8RH+0XS25rYo=
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.9 h1:QKZH0S178gCmFEgst8hN0mCX1KxLgHBKKY/CLqwP8lg=
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.9/go.mod h1:7yuQJoT+OoH8aqIxw9vwF+8KpvLZ8AWmvmUWHsGQZvI=
 github.com/aws/aws-sdk-go-v2/service/sso v1.30.15 h1:lFd1+ZSEYJZYvv9d6kXzhkZu07si3f+GQ1AaYwa2LUM=
