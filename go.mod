@@ -3,7 +3,7 @@ module github.com/moepig/dd-conf-gen
 go 1.25.6
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.41.8
+	github.com/aws/aws-sdk-go-v2 v1.41.9
 	github.com/aws/aws-sdk-go-v2/config v1.32.19
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.52.2
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.32.0
@@ -23,7 +23,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.18 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.36.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.2 // indirect
-	github.com/aws/smithy-go v1.25.1 // indirect
+	github.com/aws/smithy-go v1.26.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
