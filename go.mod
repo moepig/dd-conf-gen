@@ -3,7 +3,7 @@ module github.com/moepig/dd-conf-gen
 go 1.25.6
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.43.6
+	github.com/aws/aws-sdk-go-v2 v1.43.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.37
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.56.6
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.36.1
