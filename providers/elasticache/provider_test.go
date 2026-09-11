@@ -196,7 +196,7 @@ func TestExtractNodesWithIncompleteEndpoints(t *testing.T) {
 			{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("host"), Port: aws.Int32(6379)}},
 		},
 	}}}}
-	result := extractNodesFromReplicationGroups(groups, "cluster", nil)
+	result := extractNodesFromReplicationGroups(context.Background(), groups, "cluster", nil)
 	require.Len(t, result, 1)
 	assert.Equal(t, "host", result[0].Host)
 	assert.Equal(t, 6379, result[0].Port)

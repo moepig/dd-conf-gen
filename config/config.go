@@ -1,8 +1,9 @@
 package config
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
+	"github.com/moepig/dd-conf-gen/internal/logging"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -10,6 +11,11 @@ import (
 
 // LoadGenConfig loads and parses a generation configuration file
 func LoadGenConfig(path string) (*GenConfig, error) {
+	return LoadGenConfigContext(context.Background(), path)
+}
+
+// Reads and validates a configuration file, sending diagnostics to the context logger.
+func LoadGenConfigContext(ctx context.Context, path string) (*GenConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read generation config file: %w", err)
@@ -20,7 +26,7 @@ func LoadGenConfig(path string) (*GenConfig, error) {
 		return nil, fmt.Errorf("failed to parse generation config: %w", err)
 	}
 
-	slog.Debug("Loaded generation config", "config", cfg)
+	logging.FromContext(ctx).Debug("Loaded generation config", "config", cfg)
 
 	if err := validateGenConfig(&cfg); err != nil {
 		return nil, fmt.Errorf("invalid generation config: %w", err)

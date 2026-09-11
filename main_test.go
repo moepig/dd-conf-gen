@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
-	"flag"
+	"github.com/moepig/dd-conf-gen/internal/logging"
+	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -175,10 +175,9 @@ func TestRunEmptyResources(t *testing.T) {
 	assert.Equal(t, "instances: []\n", string(content))
 }
 
-// Runs the CLI in a subprocess so exit codes and separate output streams can be checked.
+// Calls the CLI directly to verify exit codes and separate output streams.
 func TestCLI(t *testing.T) {
-	executable, err := os.Executable()
-	require.NoError(t, err)
+	t.Parallel()
 	missingConfig := filepath.Join(t.TempDir(), "missing.yaml")
 	type cliTest struct {
 		name   string
@@ -199,18 +198,13 @@ func TestCLI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command(executable, append([]string{"-test.run=^TestCLIProcess$", "--"}, tt.args...)...)
-			cmd.Env = append(os.Environ(), "DD_CONF_GEN_CLI_TEST=1")
+			t.Parallel()
+			app := &application{registry: &providers.Registry{}}
 			var stdout, stderr bytes.Buffer
-			cmd.Stdout, cmd.Stderr = &stdout, &stderr
-			err := cmd.Run()
-			if tt.code == 0 {
-				require.NoError(t, err)
-			} else {
-				var exitErr *exec.ExitError
-				require.ErrorAs(t, err, &exitErr)
-			}
-			assert.Equal(t, tt.code, cmd.ProcessState.ExitCode())
+			originalLogger := slog.Default()
+			code := app.runCLI(context.Background(), tt.args, &stdout, &stderr)
+			assert.Same(t, originalLogger, slog.Default())
+			assert.Equal(t, tt.code, code)
 			assert.Equal(t, tt.stdout, stdout.String())
 			if tt.stderr == "" {
 				assert.Empty(t, stderr.String())
@@ -221,18 +215,35 @@ func TestCLI(t *testing.T) {
 	}
 }
 
-// Enters the real CLI only in the subprocess created by TestCLI.
-func TestCLIProcess(t *testing.T) {
-	if os.Getenv("DD_CONF_GEN_CLI_TEST") != "1" {
-		return
+// Executes generation with a mock provider and verifies that log levels and destinations apply to provider diagnostics.
+func TestCLIGenerationLogging(t *testing.T) {
+	t.Parallel()
+	for _, level := range []string{"debug", "error"} {
+		t.Run(level, func(t *testing.T) {
+			t.Parallel()
+			app, p := newTestApplication(t)
+			p.On("Discover", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+				logging.FromContext(args.Get(0).(context.Context)).Debug("provider diagnostic")
+			}).Return(nil, nil).Once()
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "redis.tmpl"), []byte("instances: []"), 0600))
+			path := writeRunConfig(t, dir, config.GenConfig{
+				Resources: []config.ResourceConfig{{Name: "redis", Type: p.Type(), Region: "us-east-1"}},
+				Outputs:   []config.OutputConfig{{Template: "redis.tmpl", OutputFile: filepath.Join(dir, "out.yaml"), Data: config.OutputData{ResourceName: "redis"}}},
+			})
+			var stdout, stderr bytes.Buffer
+			assert.Equal(t, 0, app.runCLI(context.Background(), []string{"-config", path, "-log-level", level}, &stdout, &stderr))
+			assert.Empty(t, stdout.String())
+			if level == "debug" {
+				assert.Contains(t, stderr.String(), "provider diagnostic")
+				assert.Contains(t, stderr.String(), "Read template file")
+				assert.Contains(t, stderr.String(), "Loaded generation config")
+			} else {
+				assert.Empty(t, stderr.String())
+			}
+			content, err := os.ReadFile(filepath.Join(dir, "out.yaml"))
+			require.NoError(t, err)
+			assert.Equal(t, "instances: []", string(content))
+		})
 	}
-	for i, arg := range os.Args {
-		if arg == "--" {
-			os.Args = append([]string{"dd-conf-gen"}, os.Args[i+1:]...)
-			flag.CommandLine = flag.NewFlagSet("dd-conf-gen", flag.ExitOnError)
-			main()
-			os.Exit(0)
-		}
-	}
-	t.Fatal("missing CLI argument separator")
 }

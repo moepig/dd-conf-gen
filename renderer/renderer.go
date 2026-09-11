@@ -2,11 +2,12 @@ package renderer
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"text/template"
 
+	"github.com/moepig/dd-conf-gen/internal/logging"
 	"github.com/moepig/dd-conf-gen/providers"
 )
 
@@ -29,13 +30,18 @@ func NewRenderer(templateDir string) *Renderer {
 
 // Render renders a template with the given data
 func (r *Renderer) Render(templatePath string, data TemplateData) ([]byte, error) {
+	return r.RenderContext(context.Background(), templatePath, data)
+}
+
+// Renders a template file with data, sending diagnostics to the context logger.
+func (r *Renderer) RenderContext(ctx context.Context, templatePath string, data TemplateData) ([]byte, error) {
 	// Read template file
 	content, err := os.ReadFile(templatePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read template file: %w", err)
 	}
 
-	slog.Debug("Read template file", "path", templatePath, "content", string(content))
+	logging.FromContext(ctx).Debug("Read template file", "path", templatePath, "content", string(content))
 
 	// Parse template
 	tmpl, err := template.New("config").Parse(string(content))
@@ -43,7 +49,7 @@ func (r *Renderer) Render(templatePath string, data TemplateData) ([]byte, error
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
 
-	slog.Debug("Rendering template with data", "resources_count", len(data.Resources))
+	logging.FromContext(ctx).Debug("Rendering template with data", "resources_count", len(data.Resources))
 
 	// Execute template
 	var buf bytes.Buffer
