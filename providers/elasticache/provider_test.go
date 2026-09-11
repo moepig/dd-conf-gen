@@ -105,6 +105,48 @@ func TestProvider_GetReplicationGroupsByTagsPagination(t *testing.T) {
 	}
 }
 
+// An empty page with a continuation token must be followed; a repeated token must return an error.
+func TestProvider_GetReplicationGroupsByTagsEmptyPage(t *testing.T) {
+	for _, repeated := range []bool{false, true} {
+		t.Run(fmt.Sprintf("repeated token=%t", repeated), func(t *testing.T) {
+			client := new(MockResourceGroupsTaggingClient)
+			provider := &Provider{taggingClient: client}
+			client.On("GetResources", mock.Anything, mock.MatchedBy(func(input *resourcegroupstaggingapi.GetResourcesInput) bool {
+				return aws.ToString(input.PaginationToken) == ""
+			}), mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{PaginationToken: aws.String("next")}, nil).Once()
+			mapping := taggingtypes.ResourceTagMapping{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:cluster")}
+			output := &resourcegroupstaggingapi.GetResourcesOutput{ResourceTagMappingList: []taggingtypes.ResourceTagMapping{mapping}}
+			if repeated {
+				output.PaginationToken = aws.String("next")
+			}
+			client.On("GetResources", mock.Anything, mock.MatchedBy(func(input *resourcegroupstaggingapi.GetResourcesInput) bool {
+				return aws.ToString(input.PaginationToken) == "next"
+			}), mock.Anything).Return(output, nil).Once()
+			result, err := provider.getReplicationGroupsByTags(context.Background(), nil)
+			if repeated {
+				require.ErrorContains(t, err, "repeated pagination token")
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, []taggingtypes.ResourceTagMapping{mapping}, result)
+			}
+			client.AssertExpectations(t)
+		})
+	}
+}
+
+// Missing AWS profiles must fail discovery before any API request.
+func TestProvider_DiscoverAWSConfigError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "aws-config")
+	require.NoError(t, os.WriteFile(path, nil, 0600))
+	t.Setenv("AWS_CONFIG_FILE", path)
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", path)
+	t.Setenv("AWS_PROFILE", "missing-profile")
+	result, err := NewProvider().Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1"})
+	require.ErrorContains(t, err, "failed to load AWS config")
+	assert.Nil(t, result)
+}
+
 // Injected clients must work without reading the user's AWS configuration.
 func TestProvider_DiscoverWithInjectedClients(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "aws-config")
