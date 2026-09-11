@@ -2,6 +2,9 @@ package elasticache
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -44,6 +47,262 @@ func (m *MockResourceGroupsTaggingClient) GetResources(ctx context.Context, para
 func TestProvider_Type(t *testing.T) {
 	provider := NewProvider()
 	assert.Equal(t, "elasticache_redis", provider.Type())
+}
+
+// Invalid tag values must fail before any AWS API is called.
+func TestProvider_DiscoverRejectsInvalidTagValues(t *testing.T) {
+	for _, value := range []interface{}{123, true, nil, []interface{}{"prod"}, map[string]interface{}{"env": "prod"}} {
+		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
+			provider := NewProvider()
+			provider.taggingClient = new(MockResourceGroupsTaggingClient)
+			provider.elasticacheClient = new(MockElastiCacheClient)
+			_, err := provider.Discover(context.Background(), providers.ProviderConfig{
+				Region:  "us-east-1",
+				Filters: map[string]interface{}{"tags": map[string]interface{}{"env": value}},
+			})
+			require.ErrorContains(t, err, "filters.tags.env must be a string")
+		})
+	}
+}
+
+// All pages must be returned, and a later API failure must discard partial results.
+func TestProvider_GetReplicationGroupsByTagsPagination(t *testing.T) {
+	for _, failSecondPage := range []bool{false, true} {
+		t.Run(fmt.Sprintf("second page error=%t", failSecondPage), func(t *testing.T) {
+			client := new(MockResourceGroupsTaggingClient)
+			provider := &Provider{taggingClient: client}
+			ctx := context.Background()
+			first := taggingtypes.ResourceTagMapping{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:first")}
+			second := taggingtypes.ResourceTagMapping{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:second")}
+			client.On("GetResources", ctx, mock.MatchedBy(func(input *resourcegroupstaggingapi.GetResourcesInput) bool {
+				return aws.ToString(input.PaginationToken) == ""
+			}), mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
+				ResourceTagMappingList: []taggingtypes.ResourceTagMapping{first},
+				PaginationToken:        aws.String("next"),
+			}, nil).Once()
+			secondCall := client.On("GetResources", ctx, mock.MatchedBy(func(input *resourcegroupstaggingapi.GetResourcesInput) bool {
+				return aws.ToString(input.PaginationToken) == "next" &&
+					assert.Equal(t, []string{"elasticache:replicationgroup"}, input.ResourceTypeFilters) &&
+					assert.Equal(t, buildTagFilters(map[string]string{"env": "prod"}), input.TagFilters)
+			}), mock.Anything).Once()
+			if failSecondPage {
+				secondCall.Return(nil, assert.AnError)
+			} else {
+				secondCall.Return(&resourcegroupstaggingapi.GetResourcesOutput{
+					ResourceTagMappingList: []taggingtypes.ResourceTagMapping{second},
+				}, nil)
+			}
+			result, err := provider.getReplicationGroupsByTags(ctx, map[string]string{"env": "prod"})
+			if failSecondPage {
+				require.ErrorIs(t, err, assert.AnError)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, []taggingtypes.ResourceTagMapping{first, second}, result)
+			}
+			client.AssertExpectations(t)
+		})
+	}
+}
+
+// Injected clients must work without reading the user's AWS configuration.
+func TestProvider_DiscoverWithInjectedClients(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "aws-config")
+	require.NoError(t, os.WriteFile(configPath, nil, 0600))
+	t.Setenv("AWS_CONFIG_FILE", configPath)
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", configPath)
+	t.Setenv("AWS_PROFILE", "missing-profile")
+	client := new(MockResourceGroupsTaggingClient)
+	client.On("GetResources", mock.Anything, mock.Anything, mock.Anything).
+		Return(&resourcegroupstaggingapi.GetResourcesOutput{}, nil).Once()
+	provider := &Provider{taggingClient: client, elasticacheClient: new(MockElastiCacheClient)}
+	_, err := provider.Discover(context.Background(), providers.ProviderConfig{
+		Region:  "us-east-1",
+		Filters: map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}},
+	})
+	require.NoError(t, err)
+	client.AssertExpectations(t)
+}
+
+// Reusing a provider across regions must produce clients for each requested region.
+func TestProvider_ClientsUseRequestedRegion(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "aws-config")
+	require.NoError(t, os.WriteFile(configPath, nil, 0600))
+	t.Setenv("AWS_CONFIG_FILE", configPath)
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", configPath)
+	t.Setenv("AWS_PROFILE", "")
+	provider := NewProvider()
+	for _, region := range []string{"us-east-1", "ap-northeast-1", "us-east-1"} {
+		local, err := provider.forRegion(context.Background(), region)
+		require.NoError(t, err)
+		assert.Equal(t, region, local.taggingClient.(*resourcegroupstaggingapi.Client).Options().Region)
+		assert.Equal(t, region, local.elasticacheClient.(*elasticache.Client).Options().Region)
+	}
+	assert.Nil(t, provider.taggingClient)
+	assert.Nil(t, provider.elasticacheClient)
+}
+
+// Missing endpoint fields must be skipped without losing complete nodes.
+func TestExtractNodesWithIncompleteEndpoints(t *testing.T) {
+	groups := []elasticachetypes.ReplicationGroup{{NodeGroups: []elasticachetypes.NodeGroup{{
+		NodeGroupMembers: []elasticachetypes.NodeGroupMember{
+			{},
+			{ReadEndpoint: &elasticachetypes.Endpoint{}},
+			{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("host")}},
+			{ReadEndpoint: &elasticachetypes.Endpoint{Port: aws.Int32(6379)}},
+			{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("host"), Port: aws.Int32(0)}},
+			{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("host"), Port: aws.Int32(6379)}},
+		},
+	}}}}
+	result := extractNodesFromReplicationGroups(groups, "cluster", nil)
+	require.Len(t, result, 1)
+	assert.Equal(t, "host", result[0].Host)
+	assert.Equal(t, 6379, result[0].Port)
+	assert.Equal(t, "", result[0].Metadata["ShardName"])
+}
+
+// Without tag filters, discovery includes untagged groups across all pages and preserves existing tags.
+func TestProvider_DiscoverWithoutTagFilters(t *testing.T) {
+	for _, filters := range []map[string]interface{}{nil, {"tags": map[string]interface{}{}}} {
+		t.Run(fmt.Sprint(filters), func(t *testing.T) {
+			tagging := new(MockResourceGroupsTaggingClient)
+			client := new(MockElastiCacheClient)
+			provider := &Provider{taggingClient: tagging, elasticacheClient: client}
+			taggedARN := "arn:aws:elasticache:us-east-1:123456789012:replicationgroup:tagged"
+			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
+				ResourceTagMappingList: []taggingtypes.ResourceTagMapping{{
+					ResourceARN: aws.String(taggedARN),
+					Tags:        []taggingtypes.Tag{{Key: aws.String("env"), Value: aws.String("prod")}},
+				}},
+			}, nil).Once()
+			for i, id := range []string{"tagged", "untagged"} {
+				inputMarker, outputMarker := "", "next"
+				if i == 1 {
+					inputMarker, outputMarker = "next", ""
+				}
+				client.On("DescribeReplicationGroups", mock.Anything, mock.MatchedBy(func(input *elasticache.DescribeReplicationGroupsInput) bool {
+					return input.ReplicationGroupId == nil && aws.ToString(input.Marker) == inputMarker
+				}), mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
+					Marker: aws.String(outputMarker),
+					ReplicationGroups: []elasticachetypes.ReplicationGroup{{
+						ReplicationGroupId: aws.String(id),
+						ARN:                aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:" + id),
+						NodeGroups: []elasticachetypes.NodeGroup{{
+							NodeGroupId: aws.String("0001"),
+							NodeGroupMembers: []elasticachetypes.NodeGroupMember{{
+								ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String(id + ".example.com"), Port: aws.Int32(6379)},
+							}},
+						}},
+					}},
+				}, nil).Once()
+			}
+			result, err := provider.Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1", Filters: filters})
+			require.NoError(t, err)
+			require.Len(t, result, 2)
+			assert.Equal(t, "tagged.example.com", result[0].Host)
+			assert.Equal(t, "prod", result[0].Tags["env"])
+			assert.Equal(t, "tagged", result[0].Metadata["ClusterName"])
+			assert.Equal(t, "untagged.example.com", result[1].Host)
+			assert.Empty(t, result[1].Tags)
+			assert.Equal(t, "untagged", result[1].Metadata["ClusterName"])
+			tagging.AssertExpectations(t)
+			client.AssertExpectations(t)
+		})
+	}
+}
+
+// An empty tagging result must not prevent discovery of an entirely untagged group.
+func TestProvider_DiscoverOnlyUntaggedResources(t *testing.T) {
+	tagging := new(MockResourceGroupsTaggingClient)
+	client := new(MockElastiCacheClient)
+	tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).
+		Return(&resourcegroupstaggingapi.GetResourcesOutput{}, nil).Once()
+	client.On("DescribeReplicationGroups", mock.Anything, mock.MatchedBy(func(input *elasticache.DescribeReplicationGroupsInput) bool {
+		return input.ReplicationGroupId == nil
+	}), mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
+		ReplicationGroups: []elasticachetypes.ReplicationGroup{{
+			ReplicationGroupId: aws.String("untagged"),
+			NodeGroups: []elasticachetypes.NodeGroup{{NodeGroupMembers: []elasticachetypes.NodeGroupMember{{
+				ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("untagged.example.com"), Port: aws.Int32(6379)},
+			}}}},
+		}},
+	}, nil).Once()
+	provider := &Provider{taggingClient: tagging, elasticacheClient: client}
+	result, err := provider.Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1"})
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, "untagged.example.com", result[0].Host)
+	assert.Equal(t, "untagged", result[0].Metadata["ClusterName"])
+	tagging.AssertExpectations(t)
+	client.AssertExpectations(t)
+}
+
+// Missing ARNs and nil API responses must return errors instead of panicking.
+func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
+	for _, name := range []string{"nil tagging response", "missing ARN", "empty ARN", "nil describe response"} {
+		t.Run(name, func(t *testing.T) {
+			tagging := new(MockResourceGroupsTaggingClient)
+			client := new(MockElastiCacheClient)
+			provider := &Provider{taggingClient: tagging, elasticacheClient: client}
+			var taggingOutput *resourcegroupstaggingapi.GetResourcesOutput
+			expectedError := "empty response getting resources"
+			if name != "nil tagging response" {
+				mapping := taggingtypes.ResourceTagMapping{}
+				expectedError = "resource mapping has no ARN"
+				if name == "empty ARN" {
+					mapping.ResourceARN = aws.String("")
+				} else if name == "nil describe response" {
+					mapping.ResourceARN = aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:cluster")
+					expectedError = "empty response describing replication groups"
+					client.On("DescribeReplicationGroups", mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Once()
+				}
+				taggingOutput = &resourcegroupstaggingapi.GetResourcesOutput{ResourceTagMappingList: []taggingtypes.ResourceTagMapping{mapping}}
+			}
+			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(taggingOutput, nil).Once()
+			result, err := provider.Discover(context.Background(), providers.ProviderConfig{
+				Region:  "us-east-1",
+				Filters: map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}},
+			})
+			require.ErrorContains(t, err, expectedError)
+			assert.Nil(t, result)
+			tagging.AssertExpectations(t)
+			client.AssertExpectations(t)
+		})
+	}
+}
+
+// Pagination failures must discard earlier pages, including repeated continuation markers.
+func TestProvider_DescribeReplicationGroupsPaginationFailure(t *testing.T) {
+	for _, name := range []string{"API error", "nil response", "repeated marker"} {
+		t.Run(name, func(t *testing.T) {
+			client := new(MockElastiCacheClient)
+			provider := &Provider{elasticacheClient: client}
+			client.On("DescribeReplicationGroups", mock.Anything, mock.MatchedBy(func(input *elasticache.DescribeReplicationGroupsInput) bool {
+				return aws.ToString(input.Marker) == ""
+			}), mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
+				Marker:            aws.String("next"),
+				ReplicationGroups: []elasticachetypes.ReplicationGroup{{ReplicationGroupId: aws.String("cluster")}},
+			}, nil).Once()
+			call := client.On("DescribeReplicationGroups", mock.Anything, mock.MatchedBy(func(input *elasticache.DescribeReplicationGroupsInput) bool {
+				return aws.ToString(input.Marker) == "next" && aws.ToString(input.ReplicationGroupId) == "cluster"
+			}), mock.Anything).Once()
+			switch name {
+			case "API error":
+				call.Return(nil, assert.AnError)
+			case "nil response":
+				call.Return(nil, nil)
+			case "repeated marker":
+				call.Return(&elasticache.DescribeReplicationGroupsOutput{Marker: aws.String("next")}, nil)
+			}
+			result, err := provider.describeReplicationGroups(context.Background(), &elasticache.DescribeReplicationGroupsInput{ReplicationGroupId: aws.String("cluster")})
+			require.Error(t, err)
+			if name == "API error" {
+				assert.ErrorIs(t, err, assert.AnError)
+			}
+			assert.Nil(t, result)
+			client.AssertExpectations(t)
+		})
+	}
 }
 
 func TestProvider_ValidateConfig(t *testing.T) {

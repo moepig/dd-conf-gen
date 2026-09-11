@@ -14,6 +14,8 @@ import (
 	"github.com/moepig/dd-conf-gen/renderer"
 )
 
+var version = "0.1.0"
+
 func init() {
 	// Register providers
 	providers.Register(elasticache.NewProvider())
@@ -23,7 +25,12 @@ func main() {
 	// Command line arguments
 	configPath := flag.String("config", "", "Path to generation configuration file")
 	logLevelStr := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	// Parse log level
 	var logLevel slog.Level
