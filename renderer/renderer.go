@@ -44,7 +44,7 @@ func (r *Renderer) RenderContext(ctx context.Context, templatePath string, data 
 	logging.FromContext(ctx).Debug("Read template file", "path", templatePath, "content", string(content))
 
 	// Parse template
-	tmpl, err := template.New("config").Parse(string(content))
+	tmpl, err := template.New("config").Option("missingkey=error").Parse(string(content))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}

@@ -99,6 +99,8 @@ ElastiCache のフィルターは `filters.tags` のみを受け付ける。タ�
 
 Datadog チェック設定テンプレートは Go の `text/template` 形式で記述します。
 
+`.Tags.env` や `.Metadata.ClusterName` のような参照でキーが存在しない場合、生成をエラーで終了する。任意のタグは `index` と `if` を組み合わせて参照すること。`index` による参照は欠損キーのエラー対象に含まれない。
+
 **テンプレートで利用可能なデータ:**
 
 - `.Resources`: リソースプロバイダーから取得したリソースのスライス

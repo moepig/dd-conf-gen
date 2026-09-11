@@ -288,6 +288,28 @@ instances:
 	})
 }
 
+// Missing map keys accessed with dot notation must fail without returning partially rendered configuration.
+func TestRendererMissingMapKey(t *testing.T) {
+	for _, field := range []string{"Tags.missing", "Metadata.ClustrName"} {
+		t.Run(field, func(t *testing.T) {
+			path := createTempFile(t, "prefix{{range .Resources}}{{."+field+"}}{{end}}")
+			t.Cleanup(func() { os.Remove(path) })
+			result, err := NewRenderer("").Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}, Metadata: map[string]interface{}{"ClusterName": "redis"}}}})
+			require.ErrorContains(t, err, "map has no entry for key")
+			assert.Nil(t, result)
+		})
+	}
+}
+
+// Optional tag lookup through index must remain usable in conditional template branches.
+func TestRendererOptionalTag(t *testing.T) {
+	path := createTempFile(t, `{{range .Resources}}{{if index .Tags "optional"}}present{{else}}absent{{end}}{{end}}`)
+	t.Cleanup(func() { os.Remove(path) })
+	result, err := NewRenderer("").Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}}}})
+	require.NoError(t, err)
+	assert.Equal(t, "absent", string(result))
+}
+
 func createTempFile(t *testing.T, content string) string {
 	tmpfile, err := os.CreateTemp("", "template-*.yaml")
 	require.NoError(t, err)
