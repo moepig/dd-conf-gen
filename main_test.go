@@ -71,9 +71,11 @@ func TestRunGeneratesOutputs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	filters := map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}}
+	eastValidation := p.On("ValidateConfig", providers.ProviderConfig{Region: "us-east-1", Filters: filters}).Return(nil).Once()
+	tokyoValidation := p.On("ValidateConfig", providers.ProviderConfig{Region: "ap-northeast-1", Filters: map[string]interface{}{}}).Return(nil).Once()
 	p.On("Discover", ctx, providers.ProviderConfig{Region: "us-east-1", Filters: filters}).Return([]providers.Resource{{
 		Host: "east.example.com", Port: 6379, Tags: map[string]string{"env": "prod"}, Metadata: map[string]interface{}{"ClusterName": "east"},
-	}}, nil).Once()
+	}}, nil).Once().NotBefore(eastValidation, tokyoValidation)
 	p.On("Discover", ctx, providers.ProviderConfig{Region: "ap-northeast-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{
 		Host: "tokyo.example.com", Port: 6380, Tags: map[string]string{"env": "test"}, Metadata: map[string]interface{}{"ClusterName": "tokyo"},
 	}}, nil).Once()
@@ -143,6 +145,7 @@ func TestRunFailures(t *testing.T) {
 				expectedError = "failed to write output file"
 			}
 			if name != "invalid config" && name != "unknown provider" {
+				p.On("ValidateConfig", mock.Anything).Return(nil).Once()
 				p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
 			}
 			err := app.run(context.Background(), writeRunConfig(t, dir, cfg))
@@ -161,6 +164,7 @@ func TestRunFailures(t *testing.T) {
 func TestRunEmptyResources(t *testing.T) {
 	t.Parallel()
 	app, p := newTestApplication(t)
+	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return(nil, nil).Once()
 	dir := t.TempDir()
 	output := filepath.Join(dir, "output.yaml")
@@ -223,6 +227,7 @@ func TestCLIGenerationLogging(t *testing.T) {
 		t.Run(level, func(t *testing.T) {
 			t.Parallel()
 			app, p := newTestApplication(t)
+			p.On("ValidateConfig", mock.Anything).Return(nil).Once()
 			p.On("Discover", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 				logging.FromContext(args.Get(0).(context.Context)).Debug("provider diagnostic")
 			}).Return(nil, nil).Once()

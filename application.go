@@ -50,38 +50,32 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 	if err != nil {
 		return nil, fmt.Errorf("failed to load generation config: %w", err)
 	}
+	requests, err := app.prepareResources(genCfg.Resources)
+	if err != nil {
+		return nil, err
+	}
 
 	// Discover resources for each resource config
 	logging.FromContext(ctx).Info("Discovering resources")
 	resourceMap := make(map[string][]providers.Resource)
-	for _, resCfg := range genCfg.Resources {
+	for _, request := range requests {
 		logging.FromContext(ctx).Info("Discovering resource",
-			"name", resCfg.Name,
-			"type", resCfg.Type,
-			"region", resCfg.Region)
+			"name", request.name,
+			"type", request.provider.Type(),
+			"region", request.config.Region)
 
-		provider, err := app.registry.Get(resCfg.Type)
+		logging.FromContext(ctx).Debug("Provider config", "region", request.config.Region, "filters", request.config.Filters)
+
+		discoveredResources, err := request.provider.Discover(ctx, request.config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get provider for resource '%s': %w", resCfg.Name, err)
+			return nil, fmt.Errorf("failed to discover resources for '%s': %w", request.name, err)
 		}
 
-		providerCfg := providers.ProviderConfig{
-			Region:  resCfg.Region,
-			Filters: resCfg.Filters,
-		}
-
-		logging.FromContext(ctx).Debug("Provider config", "region", providerCfg.Region, "filters", providerCfg.Filters)
-
-		discoveredResources, err := provider.Discover(ctx, providerCfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to discover resources for '%s': %w", resCfg.Name, err)
-		}
-
-		resourceMap[resCfg.Name] = discoveredResources
+		resourceMap[request.name] = discoveredResources
 		logging.FromContext(ctx).Info("Found resources",
-			"name", resCfg.Name,
+			"name", request.name,
 			"count", len(discoveredResources))
-		logging.FromContext(ctx).Debug("Resource details", "name", resCfg.Name, "resources", discoveredResources)
+		logging.FromContext(ctx).Debug("Resource details", "name", request.name, "resources", discoveredResources)
 	}
 
 	// Render templates and write output files
@@ -121,4 +115,27 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		outputs = append(outputs, generatedOutput{path: outCfg.OutputFile, content: output})
 	}
 	return outputs, nil
+}
+
+type resourceRequest struct {
+	name     string
+	provider providers.Provider
+	config   providers.ProviderConfig
+}
+
+// Resolves and validates every resource definition before any discovery begins.
+func (app *application) prepareResources(resources []config.ResourceConfig) ([]resourceRequest, error) {
+	requests := make([]resourceRequest, 0, len(resources))
+	for _, resource := range resources {
+		provider, err := app.registry.Get(resource.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get provider for resource '%s': %w", resource.Name, err)
+		}
+		cfg := providers.ProviderConfig{Region: resource.Region, Filters: resource.Filters}
+		if err := provider.ValidateConfig(cfg); err != nil {
+			return nil, fmt.Errorf("invalid provider config for resource '%s': %w", resource.Name, err)
+		}
+		requests = append(requests, resourceRequest{name: resource.Name, provider: provider, config: cfg})
+	}
+	return requests, nil
 }

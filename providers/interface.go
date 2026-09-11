@@ -10,7 +10,7 @@ type Provider interface {
 	// Discover retrieves resources based on the configuration
 	Discover(ctx context.Context, config ProviderConfig) ([]Resource, error)
 
-	// ValidateConfig checks if the provider configuration is valid
+	// Checks configuration without network access or mutation of the supplied settings.
 	ValidateConfig(config ProviderConfig) error
 }
 

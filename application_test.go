@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/moepig/dd-conf-gen/config"
+	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,46 @@ type mockOutputWriter struct{ mock.Mock }
 
 func (w *mockOutputWriter) Write(path string, content []byte) error {
 	return w.Called(path, content).Error(0)
+}
+
+// A later invalid or unregistered resource must fail before any discovery or save occurs.
+func TestApplicationPreflight(t *testing.T) {
+	t.Parallel()
+	for _, unknown := range []bool{false, true} {
+		name := "invalid settings"
+		if unknown {
+			name = "unknown provider"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			app, provider := newTestApplication(t)
+			provider.On("ValidateConfig", providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return(nil).Once()
+			secondType := provider.Type()
+			if unknown {
+				secondType = "unknown"
+			} else {
+				provider.On("ValidateConfig", providers.ProviderConfig{Region: "us-west-2", Filters: map[string]interface{}{}}).Return(assert.AnError).Once()
+			}
+			writer := new(mockOutputWriter)
+			writer.Test(t)
+			app.writer = writer
+			dir := t.TempDir()
+			path := writeRunConfig(t, dir, config.GenConfig{
+				Resources: []config.ResourceConfig{
+					{Name: "first", Type: provider.Type(), Region: "us-east-1"},
+					{Name: "second", Type: secondType, Region: "us-west-2"},
+				},
+				Outputs: []config.OutputConfig{{Template: "unused.tmpl", OutputFile: filepath.Join(dir, "out.yaml"), Data: config.OutputData{ResourceName: "first"}}},
+			})
+			err := app.run(context.Background(), path)
+			require.ErrorContains(t, err, "resource 'second'")
+			if !unknown {
+				assert.ErrorIs(t, err, assert.AnError)
+			}
+			provider.AssertNotCalled(t, "Discover", mock.Anything, mock.Anything)
+			writer.AssertNotCalled(t, "Write", mock.Anything, mock.Anything)
+		})
+	}
 }
 
 // A later rendering failure must prevent every write; a save failure must be returned and stop subsequent writes.
@@ -29,6 +70,7 @@ func TestApplicationOutputFailures(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			app, provider := newTestApplication(t)
+			provider.On("ValidateConfig", mock.Anything).Return(nil).Once()
 			provider.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
 			writer := new(mockOutputWriter)
 			writer.Test(t)

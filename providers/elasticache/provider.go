@@ -43,47 +43,23 @@ func (p *Provider) Type() string {
 	return providerType
 }
 
-// ValidateConfig checks if the provider configuration is valid
-func (p *Provider) ValidateConfig(cfg providers.ProviderConfig) error {
-	if cfg.Region == "" {
-		return fmt.Errorf("region is required")
-	}
-
-	// Check if filters contains tags
-	if cfg.Filters != nil {
-		if _, ok := cfg.Filters["tags"]; ok {
-			// tags should be a map
-			tags, ok := cfg.Filters["tags"].(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("filters.tags must be a map")
-			}
-			for key, value := range tags {
-				if _, ok := value.(string); !ok {
-					return fmt.Errorf("filters.tags.%s must be a string", key)
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
 // Discover retrieves ElastiCache Redis resources based on the configuration
 func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
 	logging.FromContext(ctx).Debug("Starting ElastiCache Redis discovery", "region", cfg.Region)
 
-	if err := p.ValidateConfig(cfg); err != nil {
+	settings, err := parseConfig(cfg)
+	if err != nil {
 		return nil, err
 	}
 
-	clientProvider, err := p.forRegion(ctx, cfg.Region)
+	clientProvider, err := p.forRegion(ctx, settings.region)
 	if err != nil {
 		return nil, err
 	}
 	p = clientProvider
 
 	// Extract tag filters from config
-	tags := extractTagFilters(cfg.Filters)
+	tags := settings.tags
 	logging.FromContext(ctx).Debug("Extracted tag filters", "tag_count", len(tags), "tags", tags)
 
 	// Get replication groups by tags
@@ -220,26 +196,6 @@ func (p *Provider) forRegion(ctx context.Context, region string) (*Provider, err
 		local.elasticacheClient = elasticache.NewFromConfig(awsCfg)
 	}
 	return &local, nil
-}
-
-// extractTagFilters extracts tag filters from the filters map
-func extractTagFilters(filters map[string]interface{}) map[string]string {
-	tags := make(map[string]string)
-	if filters == nil {
-		return tags
-	}
-
-	if tagsInterface, ok := filters["tags"]; ok {
-		if tagsMap, ok := tagsInterface.(map[string]interface{}); ok {
-			for k, v := range tagsMap {
-				if strVal, ok := v.(string); ok {
-					tags[k] = strVal
-				}
-			}
-		}
-	}
-
-	return tags
 }
 
 // getReplicationGroupsByTags retrieves replication groups filtered by tags

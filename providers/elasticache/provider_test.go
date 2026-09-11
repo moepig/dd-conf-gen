@@ -718,50 +718,6 @@ func TestProvider_Discover(t *testing.T) {
 	})
 }
 
-func TestExtractTagFilters(t *testing.T) {
-	t.Run("extract tags from filters", func(t *testing.T) {
-		filters := map[string]interface{}{
-			"tags": map[string]interface{}{
-				"Environment": "production",
-				"Team":        "backend",
-			},
-		}
-
-		result := extractTagFilters(filters)
-		assert.Len(t, result, 2)
-		assert.Equal(t, "production", result["Environment"])
-		assert.Equal(t, "backend", result["Team"])
-	})
-
-	t.Run("no tags in filters", func(t *testing.T) {
-		filters := map[string]interface{}{
-			"other": "value",
-		}
-
-		result := extractTagFilters(filters)
-		assert.Len(t, result, 0)
-	})
-
-	t.Run("nil filters", func(t *testing.T) {
-		result := extractTagFilters(nil)
-		assert.Len(t, result, 0)
-	})
-
-	t.Run("non-string tag values", func(t *testing.T) {
-		filters := map[string]interface{}{
-			"tags": map[string]interface{}{
-				"String": "value",
-				"Number": 123,
-				"Bool":   true,
-			},
-		}
-
-		result := extractTagFilters(filters)
-		assert.Len(t, result, 1)
-		assert.Equal(t, "value", result["String"])
-	})
-}
-
 func TestBuildTagFilters(t *testing.T) {
 	t.Run("build tag filters", func(t *testing.T) {
 		tags := map[string]string{
