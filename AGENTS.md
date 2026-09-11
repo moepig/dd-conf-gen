@@ -15,12 +15,13 @@
 ### 設定の組み立て
 
 - チェック設定の生成には、生成設定ファイルとDatadog チェック設定テンプレートの2つのファイルを使用する
-  - **生成設定ファイル**: リソース検索の条件（リージョン、タグフィルター、タグマッピング）と出力定義を記述する
+  - **生成設定ファイル**: リソース検索の条件（リージョン、タグフィルター）と出力定義を記述する
   - **Datadog チェック設定テンプレート**: Datadog Agent のチェック設定の形式を Go の `text/template` 形式で記述する
 - 生成設定ファイルには、リソース定義（`resources`）と出力定義（`outputs`）を記述する
-  - リソース定義: どのクラウドリソースを検索するか（type, region, filters, tag_mapping）
+  - リソース定義: どのクラウドリソースを検索するか（type, region, filters）
   - 出力定義: どのテンプレートを使って、どのファイルに出力するか（template, output_file, data）
 - Datadog チェック設定テンプレートには、発見されたリソース情報（`.Resources`）をループして、チェック設定を生成するロジックを記述する
+- タグ名の変換はテンプレートで記述する。生成設定ファイルに `tag_mapping` 項目はない
 
 ### アプリケーション設定
 
@@ -99,7 +100,9 @@ instances:
   - `config/config.go`: 生成設定の読み込みとバリデーション
   - `config/types.go`: 生成設定の型定義
 - **CLI**: 全体のオーケストレーションを担当
-  - `main.go`: プロバイダー登録、リソース検索、テンプレートレンダリング、ファイル書き込み
+  - `main.go`: プロバイダー登録、CLI 引数とログの処理
+  - `application.go`: 全リソースの事前検証、リソース検索、全テンプレートの生成、保存処理の呼び出し
+  - `output/file.go`: 一時ファイル経由での出力ファイルの置換
 
 ### テスト
 
@@ -130,9 +133,9 @@ instances:
    - `Discover(ctx, config) ([]providers.Resource, error)`: リソースを検索
    - `ValidateConfig(config) error`: 設定をバリデーション
 3. `provider_test.go` を作成し、モックを使用したユニットテストを実装
-4. `main.go` の `init()` 関数でプロバイダーを登録
+4. `main.go` で生成する `providers.Registry` にプロバイダーを登録
    ```go
-   providers.Register(rds.NewProvider())
+   registry.Register(rds.NewProvider())
    ```
 5. ドキュメント（README.md）にリソース種別の説明を追加
 
