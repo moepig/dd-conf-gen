@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/moepig/dd-conf-gen/config"
+	"github.com/moepig/dd-conf-gen/output"
 	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -45,7 +46,7 @@ func newTestApplication(t *testing.T) (*application, *mockProvider) {
 	t.Cleanup(func() {
 		p.AssertExpectations(t)
 	})
-	return &application{registry: registry}, p
+	return &application{registry: registry, writer: output.FileWriter{}}, p
 }
 
 // Writes a generation configuration in the test directory and returns its path.
@@ -136,7 +137,7 @@ func TestRunFailures(t *testing.T) {
 				expectedError = "failed to execute template"
 			case "output directory error":
 				cfg.Outputs[0].OutputFile = filepath.Join(output, "child.yaml")
-				expectedError = "failed to create output directory"
+				expectedError = "failed to write output file"
 			case "output file error":
 				cfg.Outputs[0].OutputFile = dir
 				expectedError = "failed to write output file"

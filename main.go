@@ -10,16 +10,17 @@ import (
 	"os"
 
 	"github.com/moepig/dd-conf-gen/internal/logging"
+	"github.com/moepig/dd-conf-gen/output"
 	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/moepig/dd-conf-gen/providers/elasticache"
 )
 
-var version = "0.3.0"
+var version = "0.4.0"
 
 func main() {
 	registry := &providers.Registry{}
 	registry.Register(elasticache.NewProvider())
-	app := &application{registry: registry}
+	app := &application{registry: registry, writer: output.FileWriter{}}
 	os.Exit(app.runCLI(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
 }
 

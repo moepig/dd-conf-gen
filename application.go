@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/moepig/dd-conf-gen/config"
@@ -14,14 +13,42 @@ import (
 
 type application struct {
 	registry *providers.Registry
+	writer   outputWriter
 }
 
+// Saves one output, reporting failures to the caller.
+type outputWriter interface {
+	Write(path string, content []byte) error
+}
+
+type generatedOutput struct {
+	path    string
+	content []byte
+}
+
+// Generates every output, then saves files in configuration order, stopping at the first save failure.
 func (app *application) run(ctx context.Context, configPath string) error {
+	outputs, err := app.generate(ctx, configPath)
+	if err != nil {
+		return err
+	}
+	for _, output := range outputs {
+		if err := app.writer.Write(output.path, output.content); err != nil {
+			return fmt.Errorf("failed to write output file '%s': %w", output.path, err)
+		}
+		logging.FromContext(ctx).Info("Written output file", "path", output.path)
+	}
+	logging.FromContext(ctx).Info("Done!")
+	return nil
+}
+
+// Generates all outputs before any destination is changed.
+func (app *application) generate(ctx context.Context, configPath string) ([]generatedOutput, error) {
 	// Load generation configuration
 	logging.FromContext(ctx).Info("Loading generation configuration", "config_path", configPath)
 	genCfg, err := config.LoadGenConfigContext(ctx, configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load generation config: %w", err)
+		return nil, fmt.Errorf("failed to load generation config: %w", err)
 	}
 
 	// Discover resources for each resource config
@@ -35,7 +62,7 @@ func (app *application) run(ctx context.Context, configPath string) error {
 
 		provider, err := app.registry.Get(resCfg.Type)
 		if err != nil {
-			return fmt.Errorf("failed to get provider for resource '%s': %w", resCfg.Name, err)
+			return nil, fmt.Errorf("failed to get provider for resource '%s': %w", resCfg.Name, err)
 		}
 
 		providerCfg := providers.ProviderConfig{
@@ -47,7 +74,7 @@ func (app *application) run(ctx context.Context, configPath string) error {
 
 		discoveredResources, err := provider.Discover(ctx, providerCfg)
 		if err != nil {
-			return fmt.Errorf("failed to discover resources for '%s': %w", resCfg.Name, err)
+			return nil, fmt.Errorf("failed to discover resources for '%s': %w", resCfg.Name, err)
 		}
 
 		resourceMap[resCfg.Name] = discoveredResources
@@ -61,13 +88,14 @@ func (app *application) run(ctx context.Context, configPath string) error {
 	logging.FromContext(ctx).Info("Generating output files")
 	rend := renderer.NewRenderer("")
 
+	var outputs []generatedOutput
 	for _, outCfg := range genCfg.Outputs {
 		logging.FromContext(ctx).Info("Rendering template", "output_file", outCfg.OutputFile)
 
 		// Get resources for this output
 		discoveredResources, ok := resourceMap[outCfg.Data.ResourceName]
 		if !ok {
-			return fmt.Errorf("resource '%s' not found for output '%s'", outCfg.Data.ResourceName, outCfg.OutputFile)
+			return nil, fmt.Errorf("resource '%s' not found for output '%s'", outCfg.Data.ResourceName, outCfg.OutputFile)
 		}
 
 		// Prepare template data
@@ -85,27 +113,12 @@ func (app *application) run(ctx context.Context, configPath string) error {
 		// Render template
 		output, err := rend.RenderContext(ctx, templatePath, templateData)
 		if err != nil {
-			return fmt.Errorf("failed to render template for '%s': %w", outCfg.OutputFile, err)
+			return nil, fmt.Errorf("failed to render template for '%s': %w", outCfg.OutputFile, err)
 		}
 
 		logging.FromContext(ctx).Debug("Rendered output", "output_file", outCfg.OutputFile, "content", string(output))
 
-		// Create output directory if needed
-		outDir := filepath.Dir(outCfg.OutputFile)
-		if outDir != "" && outDir != "." {
-			if err := os.MkdirAll(outDir, 0755); err != nil {
-				return fmt.Errorf("failed to create output directory '%s': %w", outDir, err)
-			}
-		}
-
-		// Write output file
-		if err := os.WriteFile(outCfg.OutputFile, output, 0644); err != nil {
-			return fmt.Errorf("failed to write output file '%s': %w", outCfg.OutputFile, err)
-		}
-
-		logging.FromContext(ctx).Info("Written output file", "path", outCfg.OutputFile)
+		outputs = append(outputs, generatedOutput{path: outCfg.OutputFile, content: output})
 	}
-
-	logging.FromContext(ctx).Info("Done!")
-	return nil
+	return outputs, nil
 }
