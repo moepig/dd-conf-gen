@@ -35,19 +35,17 @@ func (p *mockProvider) Discover(ctx context.Context, cfg providers.ProviderConfi
 	return args.Get(0).([]providers.Resource), args.Error(1)
 }
 
-// Installs a mock provider for one test and restores the registered provider afterward.
-func installMockProvider(t *testing.T) *mockProvider {
+// Creates an application with an independent registry and a mock provider.
+func newTestApplication(t *testing.T) (*application, *mockProvider) {
 	t.Helper()
 	p := new(mockProvider)
 	p.Test(t)
-	original, err := providers.Get(p.Type())
-	require.NoError(t, err)
-	providers.Register(p)
+	registry := &providers.Registry{}
+	registry.Register(p)
 	t.Cleanup(func() {
-		providers.Register(original)
 		p.AssertExpectations(t)
 	})
-	return p
+	return &application{registry: registry}, p
 }
 
 // Writes a generation configuration in the test directory and returns its path.
@@ -62,7 +60,8 @@ func writeRunConfig(t *testing.T, dir string, cfg config.GenConfig) string {
 
 // Uses mocked discovery to verify region/filter forwarding, resource selection, template paths, and output creation.
 func TestRunGeneratesOutputs(t *testing.T) {
-	p := installMockProvider(t)
+	t.Parallel()
+	app, p := newTestApplication(t)
 	dir := t.TempDir()
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "templates"), 0755))
 	templatePath := filepath.Join(dir, "templates", "redis.tmpl")
@@ -89,7 +88,7 @@ func TestRunGeneratesOutputs(t *testing.T) {
 			{Template: templatePath, OutputFile: secondOutput, Data: config.OutputData{ResourceName: "tokyo"}},
 		},
 	})
-	require.NoError(t, run(ctx, path))
+	require.NoError(t, app.run(ctx, path))
 	for output, expected := range map[string]string{
 		firstOutput: "east.example.com:6379 prod east\n", secondOutput: "tokyo.example.com:6380 test tokyo\n",
 	} {
@@ -103,7 +102,8 @@ func TestRunGeneratesOutputs(t *testing.T) {
 func TestRunFailures(t *testing.T) {
 	for _, name := range []string{"invalid config", "unknown provider", "discovery error", "missing template", "invalid template", "execution error", "output directory error", "output file error"} {
 		t.Run(name, func(t *testing.T) {
-			p := installMockProvider(t)
+			t.Parallel()
+			app, p := newTestApplication(t)
 			dir := t.TempDir()
 			output := filepath.Join(dir, "output.yaml")
 			require.NoError(t, os.WriteFile(output, []byte("existing configuration"), 0600))
@@ -144,7 +144,7 @@ func TestRunFailures(t *testing.T) {
 			if name != "invalid config" && name != "unknown provider" {
 				p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
 			}
-			err := run(context.Background(), writeRunConfig(t, dir, cfg))
+			err := app.run(context.Background(), writeRunConfig(t, dir, cfg))
 			require.ErrorContains(t, err, expectedError)
 			if discoverErr != nil {
 				assert.ErrorIs(t, err, discoverErr)
@@ -158,7 +158,8 @@ func TestRunFailures(t *testing.T) {
 
 // An empty discovery result must still render the template and replace obsolete output.
 func TestRunEmptyResources(t *testing.T) {
-	p := installMockProvider(t)
+	t.Parallel()
+	app, p := newTestApplication(t)
 	p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return(nil, nil).Once()
 	dir := t.TempDir()
 	output := filepath.Join(dir, "output.yaml")
@@ -168,7 +169,7 @@ func TestRunEmptyResources(t *testing.T) {
 		Resources: []config.ResourceConfig{{Name: "redis", Type: p.Type(), Region: "us-east-1"}},
 		Outputs:   []config.OutputConfig{{Template: "redis.tmpl", OutputFile: output, Data: config.OutputData{ResourceName: "redis"}}},
 	})
-	require.NoError(t, run(context.Background(), path))
+	require.NoError(t, app.run(context.Background(), path))
 	content, err := os.ReadFile(output)
 	require.NoError(t, err)
 	assert.Equal(t, "instances: []\n", string(content))

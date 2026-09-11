@@ -14,11 +14,10 @@ import (
 	"github.com/moepig/dd-conf-gen/renderer"
 )
 
-var version = "0.1.0"
+var version = "0.2.0"
 
-func init() {
-	// Register providers
-	providers.Register(elasticache.NewProvider())
+type application struct {
+	registry *providers.Registry
 }
 
 func main() {
@@ -65,13 +64,16 @@ func main() {
 	ctx := context.Background()
 
 	// Run the application
-	if err := run(ctx, *configPath); err != nil {
+	registry := &providers.Registry{}
+	registry.Register(elasticache.NewProvider())
+	app := &application{registry: registry}
+	if err := app.run(ctx, *configPath); err != nil {
 		slog.Error("Application failed", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, configPath string) error {
+func (app *application) run(ctx context.Context, configPath string) error {
 	// Load generation configuration
 	slog.Info("Loading generation configuration", "config_path", configPath)
 	genCfg, err := config.LoadGenConfig(configPath)
@@ -88,7 +90,7 @@ func run(ctx context.Context, configPath string) error {
 			"type", resCfg.Type,
 			"region", resCfg.Region)
 
-		provider, err := providers.Get(resCfg.Type)
+		provider, err := app.registry.Get(resCfg.Type)
 		if err != nil {
 			return fmt.Errorf("failed to get provider for resource '%s': %w", resCfg.Name, err)
 		}

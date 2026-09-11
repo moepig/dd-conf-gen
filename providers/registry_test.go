@@ -30,42 +30,35 @@ func (p *registryMockProvider) Discover(ctx context.Context, cfg ProviderConfig)
 	return args.Get(0).([]Resource), args.Error(1)
 }
 
-// Isolates registry entries for a test and restores the original entries after all workers finish.
-func isolateRegistry(t *testing.T) {
-	t.Helper()
-	mu.Lock()
-	original := registry
-	registry = make(map[string]Provider)
-	mu.Unlock()
-	t.Cleanup(func() {
-		mu.Lock()
-		registry = original
-		mu.Unlock()
-	})
-}
-
 // Registered mock providers must be retrievable by type and listed independently of registration order.
 func TestRegistry(t *testing.T) {
-	isolateRegistry(t)
-	assert.Empty(t, List())
-	p, err := Get("missing")
+	t.Parallel()
+	r := &Registry{}
+	assert.Empty(t, r.List())
+	p, err := r.Get("missing")
 	require.ErrorContains(t, err, "provider not found for resource type: missing")
 	assert.Nil(t, p)
 	first := &registryMockProvider{kind: "first"}
 	second := &registryMockProvider{kind: "second"}
-	Register(first)
-	Register(second)
+	r.Register(first)
+	r.Register(second)
 	for _, expected := range []*registryMockProvider{first, second} {
-		actual, err := Get(expected.Type())
+		actual, err := r.Get(expected.Type())
 		require.NoError(t, err)
 		assert.Same(t, expected, actual)
 	}
-	assert.ElementsMatch(t, []string{"first", "second"}, List())
+	assert.ElementsMatch(t, []string{"first", "second"}, r.List())
+	other := &Registry{}
+	other.Register(&registryMockProvider{kind: "first"})
+	actual, err := r.Get("first")
+	require.NoError(t, err)
+	assert.Same(t, first, actual)
 }
 
 // Concurrent registration, lookup, and listing must preserve every provider without data races.
 func TestRegistryConcurrentAccess(t *testing.T) {
-	isolateRegistry(t)
+	t.Parallel()
+	r := &Registry{}
 	const count = 32
 	var wg sync.WaitGroup
 	for i := range count {
@@ -73,13 +66,13 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			p := &registryMockProvider{kind: fmt.Sprintf("provider-%d", i)}
-			Register(p)
-			actual, err := Get(p.Type())
+			r.Register(p)
+			actual, err := r.Get(p.Type())
 			assert.NoError(t, err)
 			assert.Same(t, p, actual)
-			assert.Contains(t, List(), p.Type())
+			assert.Contains(t, r.List(), p.Type())
 		}()
 	}
 	wg.Wait()
-	assert.Len(t, List(), count)
+	assert.Len(t, r.List(), count)
 }
