@@ -49,6 +49,32 @@ func TestProvider_Type(t *testing.T) {
 	assert.Equal(t, "elasticache_redis", provider.Type())
 }
 
+// Cluster mode must fail discovery for both filtered and unfiltered searches instead of generating empty output.
+func TestProvider_DiscoverClusterMode(t *testing.T) {
+	for _, filtered := range []bool{false, true} {
+		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
+			tagging := new(MockResourceGroupsTaggingClient)
+			client := new(MockElastiCacheClient)
+			p := &Provider{taggingClient: tagging, elasticacheClient: client}
+			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
+				ResourceTagMappingList: []taggingtypes.ResourceTagMapping{{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:cluster")}},
+			}, nil).Once()
+			client.On("DescribeReplicationGroups", mock.Anything, mock.Anything, mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
+				ReplicationGroups: []elasticachetypes.ReplicationGroup{{ReplicationGroupId: aws.String("cluster"), ClusterEnabled: aws.Bool(true)}},
+			}, nil).Once()
+			cfg := providers.ProviderConfig{Region: "us-east-1"}
+			if filtered {
+				cfg.Filters = map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}}
+			}
+			result, err := p.Discover(context.Background(), cfg)
+			require.ErrorContains(t, err, "replication group cluster uses unsupported cluster mode")
+			assert.Nil(t, result)
+			tagging.AssertExpectations(t)
+			client.AssertExpectations(t)
+		})
+	}
+}
+
 // Invalid tag values must fail before any AWS API is called.
 func TestProvider_DiscoverRejectsInvalidTagValues(t *testing.T) {
 	for _, value := range []interface{}{123, true, nil, []interface{}{"prod"}, map[string]interface{}{"env": "prod"}} {

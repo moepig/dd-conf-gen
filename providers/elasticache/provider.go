@@ -164,6 +164,11 @@ func (p *Provider) describeReplicationGroups(ctx context.Context, input *elastic
 		if output == nil {
 			return nil, fmt.Errorf("empty response describing replication groups")
 		}
+		for _, group := range output.ReplicationGroups {
+			if aws.ToBool(group.ClusterEnabled) {
+				return nil, fmt.Errorf("replication group %s uses unsupported cluster mode", aws.ToString(group.ReplicationGroupId))
+			}
+		}
 		result = append(result, output.ReplicationGroups...)
 		marker := aws.ToString(output.Marker)
 		if marker == "" {

@@ -52,9 +52,12 @@ ElastiCache Redis プロバイダーは、AWS ElastiCache for Redis のレプリ
 
 ### 取得されるノード
 
-- クラスタモード有効/無効に関わらず、すべてのノード（プライマリ + レプリカ）を取得します
+- クラスターモード無効のレプリケーショングループを対象とし、プライマリとレプリカのノードを取得する
+- クラスターモード有効のレプリケーショングループを検出した場合、検索をエラーで終了し、出力ファイルを更新しない
 - 各ノードには、そのノードが属するレプリケーショングループのタグがすべて付与されます
 - ReadEndpoint が存在するノードのみが取得されます
+
+ノードの `ReadEndpoint` はクラスターモード無効時のみ利用できる。API の適用範囲の詳細は、[AWS の NodeGroupMember 仕様](https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_NodeGroupMember.html)を参照。
 
 ## 設定例
 
