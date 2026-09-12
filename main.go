@@ -20,7 +20,7 @@ import (
 )
 
 // Build version; release builds may override it through linker flags.
-var version = "0.32.0"
+var version = "0.33.0"
 
 // Initializes the application and exits with the CLI status.
 func main() {
@@ -56,6 +56,11 @@ func (app *application) runCLI(ctx context.Context, args []string, stdout, stder
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		return 2
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "Error: positional arguments are not supported")
+		flags.Usage()
 		return 2
 	}
 	if *showVersion {

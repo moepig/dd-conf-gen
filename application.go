@@ -179,7 +179,7 @@ type preparedOutput struct {
 
 // Prepares templates and destinations for outputs without writing files.
 //
-// Resolves relative template paths against configDir and uses ctx for cancellation and logging. Returns prepared outputs in definition order, or nil and an error for cancellation, template errors, invalid destinations, or duplicate resolved paths.
+// Resolves relative template paths against configDir and uses ctx for cancellation and logging. Returns prepared outputs in definition order, or nil and an error for cancellation, template errors, invalid destinations, or resolved paths that coincide or contain another output path.
 func (app *application) prepareOutputs(ctx context.Context, outputs []config.OutputConfig, configDir string) ([]preparedOutput, error) {
 	prepared := make([]preparedOutput, 0, len(outputs))
 	for _, out := range outputs {
@@ -210,6 +210,17 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		}
 		paths[destination.Path()] = i
 		prepared[i].destination = destination
+	}
+	for i, out := range prepared {
+		path := out.destination.Path()
+		for parent := filepath.Dir(path); ; parent = filepath.Dir(parent) {
+			if ancestor, ok := paths[parent]; ok {
+				return nil, fmt.Errorf("output[%d]: output_file is inside output[%d]: %s", i, ancestor, outputs[i].OutputFile)
+			}
+			if parent == filepath.Dir(parent) {
+				break
+			}
+		}
 	}
 	return prepared, nil
 }
