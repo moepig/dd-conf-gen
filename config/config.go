@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -23,8 +25,17 @@ func LoadGenConfigContext(ctx context.Context, path string) (*GenConfig, error) 
 	}
 
 	var cfg GenConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse generation config: %w", err)
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse generation config: %w", err)
+		}
+		return nil, fmt.Errorf("generation config must contain exactly one YAML document")
 	}
 
 	logging.FromContext(ctx).Debug("Loaded generation config", "config", cfg)

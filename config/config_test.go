@@ -3,11 +3,37 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Loads misspelled fields and trailing documents from files and requires rejection without a partial configuration.
+func TestLoadGenConfigStrictYAML(t *testing.T) {
+	t.Parallel()
+	valid := "resources:\n  - name: redis\n    type: elasticache_redis\n    region: us-east-1\n    filters:\n      tags:\n        env: prod\noutputs:\n  - template: redis.tmpl\n    output_file: out.yaml\n    data:\n      resource_name: redis\n"
+	for name, content := range map[string]string{
+		"top level":                 valid + "unknown: true\n",
+		"resource":                  strings.Replace(valid, "filters:", "filter:", 1),
+		"output":                    strings.Replace(valid, "    data:", "    unknown: true\n    data:", 1),
+		"output data":               valid + "      unknown: true\n",
+		"second document":           valid + "---\nresources: []\noutputs: []\n",
+		"empty second document":     valid + "---\n",
+		"malformed second document": valid + "---\n[",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg, err := LoadGenConfig(createTempFile(t, content))
+			require.Error(t, err)
+			assert.Nil(t, cfg)
+		})
+	}
+	cfg, err := LoadGenConfig(createTempFile(t, valid+"...\n# trailing comment\n"))
+	require.NoError(t, err)
+	assert.Len(t, cfg.Resources, 1)
+}
 
 func TestLoadGenConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
