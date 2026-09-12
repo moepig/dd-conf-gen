@@ -89,6 +89,9 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 		}
 		var result []providers.Resource
 		for _, group := range groups {
+			if !settings.conditions.Matches(arnToTags[aws.ToString(group.ARN)]) {
+				continue
+			}
 			result = append(result, extractNodesFromReplicationGroups(ctx,
 				[]elasticachetypes.ReplicationGroup{group}, aws.ToString(group.ReplicationGroupId), arnToTags[aws.ToString(group.ARN)],
 			)...)
@@ -98,6 +101,9 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 
 	var result []providers.Resource
 	for _, mapping := range resourceTagMappings {
+		if !settings.conditions.Matches(tagsFromMapping(mapping)) {
+			continue
+		}
 		arn := aws.ToString(mapping.ResourceARN)
 		if arn == "" {
 			return nil, fmt.Errorf("resource mapping has no ARN")

@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/moepig/dd-conf-gen/internal/tagfilter"
 	"github.com/moepig/dd-conf-gen/providers"
 )
 
 // Holds a validated region and independently owned cluster tag filters.
 type discoveryConfig struct {
-	region string
-	tags   map[string]string
+	region     string
+	tags       map[string]string
+	conditions tagfilter.Conditions
 }
 
 // Validates cfg without external access or mutation and returns a search retaining independent settings and the current client reference, or a configuration error.
@@ -30,22 +32,9 @@ func parseConfig(cfg providers.ProviderConfig) (discoveryConfig, error) {
 	if cfg.Region == "" {
 		return discoveryConfig{}, fmt.Errorf("region is required")
 	}
-	settings := discoveryConfig{region: cfg.Region, tags: make(map[string]string)}
-	for key, value := range cfg.Filters {
-		if key != "tags" {
-			return discoveryConfig{}, fmt.Errorf("unsupported filter: %s", key)
-		}
-		tags, ok := value.(map[string]interface{})
-		if !ok {
-			return discoveryConfig{}, fmt.Errorf("filters.tags must be a map")
-		}
-		for key, value := range tags {
-			tag, ok := value.(string)
-			if !ok {
-				return discoveryConfig{}, fmt.Errorf("filters.tags.%s must be a string", key)
-			}
-			settings.tags[key] = tag
-		}
+	tags, conditions, err := tagfilter.Parse(cfg.Filters)
+	if err != nil {
+		return discoveryConfig{}, err
 	}
-	return settings, nil
+	return discoveryConfig{region: cfg.Region, tags: tags, conditions: conditions}, nil
 }

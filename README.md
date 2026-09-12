@@ -62,7 +62,8 @@ dd-conf-gen -config gen-config.yaml -timeout 30s
 | `name`         | string | ○    | リソースの識別子（outputs から参照される）            |
 | `type`         | string | ○    | リソースプロバイダーの種別（例: `elasticache_redis`） |
 | `region`       | string | ○    | AWS リージョン（例: `ap-northeast-1`）                |
-| `filters.tags` | map    | -    | タグによるフィルタリング（key-value のペア）          |
+| `filters.tags` | map    | -    | タグによる完全一致の AND 条件 |
+| `filters.tag_conditions` | array | - | 候補値、除外、存在・不在によるタグ条件 |
 
 #### outputs 項目
 
@@ -117,7 +118,34 @@ outputs:
 
 出力先はシンボリックリンクを解決してから `..` を処理し、絶対パスとして保持する。同じ出力先を複数の出力定義で指定してはいけない。保存には検証済みのパスを使用し、そのパスのシンボリックリンクによる転送先が変化した場合はエラーとする。検証後に元のエイリアスだけを変更しても、保存先は変わらない。保存処理と同時に行われる外部からのファイルシステム変更に対する排他制御は行わない。
 
-ElastiCache と Aurora MySQL のフィルターは `filters.tags` のみを受け付ける。タグ値は文字列で指定すること。数値や真偽値として解釈される YAML の値は引用符で囲む必要がある。未対応のフィルター名や文字列以外のタグ値はエラーとする。
+ElastiCache と Aurora MySQL のフィルターは `filters.tags` と `filters.tag_conditions` を受け付ける。タグ値は文字列で指定すること。数値や真偽値として解釈される YAML の値は引用符で囲む必要がある。未対応のフィルター名や文字列以外のタグ値はエラーとする。
+
+### タグ条件
+
+`filters.tag_conditions` の条件はすべて AND で結合し、`filters.tags` と併用した場合は両方を満たすリソースを選択する。対象は ElastiCache のレプリケーショングループタグと Aurora のクラスタータグである。キーと値は大文字小文字を区別する。
+
+各条件は `key` と `operator` を指定する。演算子と `values` の指定方法を、以下に示す。
+
+| `operator` | `values` | 一致条件 |
+| --- | --- | --- |
+| `in` | 空でない文字列リスト | タグが存在し、値が候補のいずれかと完全一致する |
+| `not_in` | 空でない文字列リスト | タグが存在しない、または値が候補のどれとも一致しない |
+| `exists` | 指定禁止 | タグが存在する。空文字列の値も含む |
+| `not_exists` | 指定禁止 | タグが存在しない |
+
+本番または検証環境から、監視除外タグのある対象を除く条件を、以下に示す。
+
+```yaml
+filters:
+  tag_conditions:
+    - key: env
+      operator: in
+      values: [prod, staging]
+    - key: monitoring-disabled
+      operator: not_exists
+```
+
+タグ条件は取得したタグに対して判定する。`filters.tags` を省略した検索はタグのないリソースも評価するため、除外条件のみの検索も使用できる。
 
 ### 出力ファイルの更新
 

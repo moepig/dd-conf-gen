@@ -71,7 +71,7 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 			continue
 		}
 		tags := clusterTags(cluster.TagList)
-		if !matchesTags(tags, settings.tags) {
+		if !matchesTags(tags, settings.tags) || !settings.conditions.Matches(tags) {
 			continue
 		}
 		id := aws.ToString(cluster.DBClusterIdentifier)

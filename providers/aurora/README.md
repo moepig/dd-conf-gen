@@ -22,6 +22,8 @@ Datadog が指定する Aurora の接続先については、[Aurora MySQL の D
 | `region` | ○ | 検索対象の AWS リージョン |
 | `filters.tags` | | クラスタータグのキーと文字列値のマップ |
 
+`filters.tag_conditions` で候補値の OR、除外、タグの存在・不在も指定できる。条件の詳細は、[タグ条件](../../README.md#タグ条件) を参照。
+
 未対応のフィルター名、マップ以外の `filters.tags`、文字列以外のタグ値は、AWS API へのアクセス前にエラーとする。
 
 生成設定と MySQL チェックのテンプレート例は、[gen-config-aurora-mysql.yaml](../../examples/gen-config-aurora-mysql.yaml) と [mysql.yaml.tmpl](../../examples/templates/mysql.yaml.tmpl) を参照。

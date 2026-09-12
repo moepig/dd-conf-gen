@@ -411,3 +411,31 @@ func TestMySQLTemplate(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(content, &cfg))
 	assert.Empty(t, cfg.Instances)
 }
+
+// Applies candidate-value and exclusion conditions before instance queries using mocked clusters.
+func TestDiscoveryTagConditions(t *testing.T) {
+	t.Parallel()
+	for _, env := range []string{"prod", "staging", "dev"} {
+		t.Run(env, func(t *testing.T) {
+			client := newMockClient(t)
+			cluster := testCluster()
+			cluster.TagList = []rdstypes.Tag{{Key: aws.String("env"), Value: aws.String(env)}}
+			client.On("DescribeDBClusters", mock.Anything, mock.Anything, mock.Anything).Return(&rds.DescribeDBClustersOutput{DBClusters: []rdstypes.DBCluster{cluster}}, nil).Once()
+			if env != "dev" {
+				client.On("DescribeDBInstances", mock.Anything, mock.Anything, mock.Anything).Return(&rds.DescribeDBInstancesOutput{DBInstances: []rdstypes.DBInstance{testInstance("writer")}}, nil).Once()
+			}
+			discover, err := NewProviderWithClient(client).Prepare(providers.ProviderConfig{Region: "east", Filters: map[string]interface{}{"tag_conditions": []interface{}{
+				map[string]interface{}{"key": "env", "operator": "in", "values": []interface{}{"prod", "staging"}},
+				map[string]interface{}{"key": "disabled", "operator": "not_exists"},
+			}}})
+			require.NoError(t, err)
+			resources, err := discover(context.Background())
+			require.NoError(t, err)
+			if env == "dev" {
+				assert.Empty(t, resources)
+			} else {
+				assert.Len(t, resources, 1)
+			}
+		})
+	}
+}

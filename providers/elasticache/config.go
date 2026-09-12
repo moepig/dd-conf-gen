@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/moepig/dd-conf-gen/internal/tagfilter"
 	"github.com/moepig/dd-conf-gen/providers"
 )
 
-// Holds a validated region and an independently owned map of tag filters.
+// Holds a validated region and independently owned tag filters.
 type discoveryConfig struct {
-	region string
-	tags   map[string]string
+	region     string
+	tags       map[string]string
+	conditions tagfilter.Conditions
 }
 
 // Prepares a resource search from cfg without external access or mutation of cfg.
@@ -27,29 +29,14 @@ func (p *Provider) Prepare(cfg providers.ProviderConfig) (providers.Discovery, e
 	}, nil
 }
 
-// Converts cfg into independently owned, typed discovery settings.
-//
-// Returns settings, or a zero value and an error for a missing region, unsupported filters, a tags value other than map[string]interface{}, or non-string tag values.
+// Converts cfg into independently owned settings, or returns zero settings and an error for a missing region or invalid filters.
 func parseConfig(cfg providers.ProviderConfig) (discoveryConfig, error) {
 	if cfg.Region == "" {
 		return discoveryConfig{}, fmt.Errorf("region is required")
 	}
-	result := discoveryConfig{region: cfg.Region, tags: make(map[string]string)}
-	for key, value := range cfg.Filters {
-		if key != "tags" {
-			return discoveryConfig{}, fmt.Errorf("unsupported filter: %s", key)
-		}
-		tags, ok := value.(map[string]interface{})
-		if !ok {
-			return discoveryConfig{}, fmt.Errorf("filters.tags must be a map")
-		}
-		for key, value := range tags {
-			tag, ok := value.(string)
-			if !ok {
-				return discoveryConfig{}, fmt.Errorf("filters.tags.%s must be a string", key)
-			}
-			result.tags[key] = tag
-		}
+	tags, conditions, err := tagfilter.Parse(cfg.Filters)
+	if err != nil {
+		return discoveryConfig{}, err
 	}
-	return result, nil
+	return discoveryConfig{region: cfg.Region, tags: tags, conditions: conditions}, nil
 }

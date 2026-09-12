@@ -853,3 +853,23 @@ func TestFilteredDiscoveryKeepsMappingTags(t *testing.T) {
 	client.AssertExpectations(t)
 	tagging.AssertExpectations(t)
 }
+
+// Applies exclusion conditions to tagged and untagged groups from mocked APIs and verifies that untagged nodes remain discoverable.
+func TestDiscoveryTagConditions(t *testing.T) {
+	t.Parallel()
+	client, tagging := new(MockElastiCacheClient), new(MockResourceGroupsTaggingClient)
+	tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
+		ResourceTagMappingList: []taggingtypes.ResourceTagMapping{{ResourceARN: aws.String("arn:disabled"), Tags: []taggingtypes.Tag{{Key: aws.String("disabled"), Value: aws.String("")}}}},
+	}, nil).Once()
+	var groups []elasticachetypes.ReplicationGroup
+	for _, id := range []string{"disabled", "untagged"} {
+		groups = append(groups, elasticachetypes.ReplicationGroup{ARN: aws.String("arn:" + id), ReplicationGroupId: aws.String(id), NodeGroups: []elasticachetypes.NodeGroup{{NodeGroupMembers: []elasticachetypes.NodeGroupMember{{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String(id), Port: aws.Int32(6379)}}}}}})
+	}
+	client.On("DescribeReplicationGroups", mock.Anything, mock.Anything, mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{ReplicationGroups: groups}, nil).Once()
+	resources, err := discoverForTest(NewProviderWithClients(client, tagging), context.Background(), providers.ProviderConfig{Region: "east", Filters: map[string]interface{}{"tag_conditions": []interface{}{map[string]interface{}{"key": "disabled", "operator": "not_exists"}}}})
+	require.NoError(t, err)
+	require.Len(t, resources, 1)
+	assert.Equal(t, "untagged", resources[0].Host)
+	client.AssertExpectations(t)
+	tagging.AssertExpectations(t)
+}
