@@ -228,13 +228,15 @@ func TestCLI(t *testing.T) {
 		{name: "version", args: []string{"-version"}, stdout: version + "\n"},
 		{name: "help", args: []string{"-help"}, stderr: "Usage of dd-conf-gen:"},
 		{name: "missing config", code: 1, stderr: "-config option is required"},
-		{name: "invalid log level", args: []string{"-log-level=invalid"}, code: 1, stderr: "invalid log level 'invalid'"},
+		{name: "invalid log level", args: []string{"-log-level=invalid"}, code: 2, stderr: "invalid value"},
+		{name: "invalid log offset", args: []string{"-log-level=info+nope"}, code: 2, stderr: "invalid value"},
+		{name: "invalid log level with version", args: []string{"-version", "-log-level=invalid"}, code: 2, stderr: "invalid value"},
 		{name: "unknown flag", args: []string{"-unknown"}, code: 2, stderr: "flag provided but not defined"},
 		{name: "invalid timeout", args: []string{"-timeout=nope"}, code: 2, stderr: "invalid value"},
 		{name: "zero timeout", args: []string{"-timeout=0"}, code: 1, stderr: "-timeout must be positive"},
 		{name: "negative timeout", args: []string{"-timeout=-1s"}, code: 1, stderr: "-timeout must be positive"},
 	}
-	for _, level := range []string{"debug", "info", "warn", "error"} {
+	for _, level := range []string{"debug", "info", "warn", "error", "DEBUG", "Info", "WARN", "Error-8", "INFO+2"} {
 		tests = append(tests, cliTest{name: level, args: []string{"-log-level=" + level, "-config=" + missingConfig}, code: 1, stderr: "failed to read generation config file"})
 	}
 	for _, tt := range tests {
@@ -259,7 +261,7 @@ func TestCLI(t *testing.T) {
 // Executes generation with a mock provider and verifies that log levels and destinations apply to provider diagnostics.
 func TestCLIGenerationLogging(t *testing.T) {
 	t.Parallel()
-	for _, level := range []string{"debug", "error"} {
+	for _, level := range []string{"debug", "DEBUG", "INFO-4", "error", "ERROR-1"} {
 		t.Run(level, func(t *testing.T) {
 			t.Parallel()
 			app, p := newTestApplication(t)
@@ -276,7 +278,7 @@ func TestCLIGenerationLogging(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			assert.Equal(t, 0, app.runCLI(context.Background(), []string{"-config", path, "-log-level", level}, &stdout, &stderr))
 			assert.Empty(t, stdout.String())
-			if level == "debug" {
+			if level == "debug" || level == "DEBUG" || level == "INFO-4" {
 				assert.Contains(t, stderr.String(), "provider diagnostic")
 				assert.Contains(t, stderr.String(), "Read template file")
 				assert.Contains(t, stderr.String(), "Loaded generation config")

@@ -18,7 +18,7 @@ import (
 	"github.com/moepig/dd-conf-gen/providers/elasticache"
 )
 
-var version = "0.23.0"
+var version = "0.24.0"
 
 func main() {
 	registry := &providers.Registry{}
@@ -39,7 +39,8 @@ func (app *application) runCLI(ctx context.Context, args []string, stdout, stder
 	flags := flag.NewFlagSet("dd-conf-gen", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "Path to generation configuration file")
-	logLevelStr := flags.String("log-level", "info", "Log level (debug, info, warn, error)")
+	var logLevel slog.Level
+	flags.TextVar(&logLevel, "log-level", slog.LevelInfo, "Log level (debug, info, warn, error; case-insensitive, optional numeric offset)")
 	showVersion := flags.Bool("version", false, "Print version and exit")
 	timeout := flags.Duration("timeout", 5*time.Minute, "Execution timeout (positive duration, e.g. 30s or 5m)")
 	if err := flags.Parse(args); err != nil {
@@ -58,21 +59,6 @@ func (app *application) runCLI(ctx context.Context, args []string, stdout, stder
 	}
 	ctx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()
-	var logLevel slog.Level
-	switch *logLevelStr {
-	case "debug":
-		logLevel = slog.LevelDebug
-	case "info":
-		logLevel = slog.LevelInfo
-	case "warn":
-		logLevel = slog.LevelWarn
-	case "error":
-		logLevel = slog.LevelError
-	default:
-		fmt.Fprintf(stderr, "Error: invalid log level '%s' (must be debug, info, warn, or error)\n", *logLevelStr)
-		flags.Usage()
-		return 1
-	}
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: logLevel}))
 	ctx = logging.WithLogger(ctx, logger)
 	if *configPath == "" {

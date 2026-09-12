@@ -2,8 +2,9 @@ package providers
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -63,10 +64,5 @@ func isNilProvider(provider Provider) bool {
 func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	types := make([]string, 0, len(r.providers))
-	for t := range r.providers {
-		types = append(types, t)
-	}
-	sort.Strings(types)
-	return types
+	return slices.Sorted(maps.Keys(r.providers))
 }

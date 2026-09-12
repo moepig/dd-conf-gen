@@ -38,6 +38,10 @@ dd-conf-gen -config gen-config.yaml
 dd-conf-gen -config gen-config.yaml -timeout 30s
 ```
 
+### ログレベル
+
+`-log-level` は `debug`・`info`・`warn`・`error` を大文字小文字の区別なく受け付ける。`INFO+2` のような数値オフセットも指定できる。既定値は `info` である。不正な値は CLI 引数の解析エラーとして終了コード 2 を返す。`-version` と併用した場合も引数の値を検証する。
+
 ### 生成設定ファイルの構造
 
 生成設定ファイルは単一の YAML ドキュメントとして記述する。未定義の設定項目や複数の YAML ドキュメントはエラーとする。
