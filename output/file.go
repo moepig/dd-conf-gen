@@ -12,29 +12,51 @@ type FileWriter struct{}
 // Writes content to path, preserving existing file permissions and following existing symlinks.
 // Failures before the rename leave the existing destination unchanged; dangling symlinks are rejected.
 func (FileWriter) Write(path string, content []byte) error {
-	target := path
-	info, err := os.Lstat(path)
-	if err == nil && info.Mode()&os.ModeSymlink != 0 {
-		target, err = filepath.EvalSymlinks(path)
-		if err != nil {
-			return fmt.Errorf("failed to resolve output symlink: %w", err)
-		}
-	} else if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to inspect output file: %w", err)
+	target, mode, err := inspectDestination(path)
+	if err != nil {
+		return err
 	}
 	dir := filepath.Dir(target)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory '%s': %w", dir, err)
 	}
+	return writeTemporaryFile(target, content, mode)
+}
+
+// Checks existing destination types and symlinks without modifying the filesystem.
+// Permissions, free space, and subsequent filesystem changes are checked by the actual write.
+func (FileWriter) Validate(path string) error {
+	_, _, err := inspectDestination(path)
+	return err
+}
+
+// Resolves the destination and existing permissions, rejecting unusable destination types.
+func inspectDestination(path string) (string, os.FileMode, error) {
+	target := path
+	info, err := os.Lstat(path)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		target, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return "", 0, fmt.Errorf("failed to resolve output symlink: %w", err)
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", 0, fmt.Errorf("failed to inspect output file: %w", err)
+	}
 	mode := os.FileMode(0644)
 	if info, err := os.Stat(target); err == nil {
 		if !info.Mode().IsRegular() {
-			return fmt.Errorf("output destination is not a regular file: %s", path)
+			return "", 0, fmt.Errorf("output destination is not a regular file: %s", path)
 		}
 		mode = info.Mode().Perm()
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to inspect output file: %w", err)
+		return "", 0, fmt.Errorf("failed to inspect output file: %w", err)
 	}
+	return target, mode, nil
+}
+
+// Writes and replaces a destination using a temporary file in the same directory.
+func writeTemporaryFile(target string, content []byte, mode os.FileMode) error {
+	dir := filepath.Dir(target)
 	temp, err := os.CreateTemp(dir, ".dd-conf-gen-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary output file: %w", err)

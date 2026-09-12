@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -308,6 +309,18 @@ func TestRendererOptionalTag(t *testing.T) {
 	result, err := NewRenderer().Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}}}})
 	require.NoError(t, err)
 	assert.Equal(t, "absent", string(result))
+}
+
+// Compiled templates must use the validated source even if the template file changes before rendering.
+func TestCompiledTemplateUsesValidatedSource(t *testing.T) {
+	path := createTempFile(t, "validated")
+	t.Cleanup(func() { os.Remove(path) })
+	compiled, err := NewRenderer().CompileContext(context.Background(), path)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, []byte("{{"), 0600))
+	content, err := compiled.RenderContext(context.Background(), TemplateData{})
+	require.NoError(t, err)
+	assert.Equal(t, "validated", string(content))
 }
 
 func createTempFile(t *testing.T, content string) string {

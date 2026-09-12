@@ -15,6 +15,8 @@ import (
 
 type mockOutputWriter struct{ mock.Mock }
 
+func (w *mockOutputWriter) Validate(path string) error { return w.Called(path).Error(0) }
+
 func (w *mockOutputWriter) Write(path string, content []byte) error {
 	return w.Called(path, content).Error(0)
 }
@@ -71,7 +73,6 @@ func TestApplicationOutputFailures(t *testing.T) {
 			t.Parallel()
 			app, provider := newTestApplication(t)
 			provider.On("ValidateConfig", mock.Anything).Return(nil).Once()
-			provider.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
 			writer := new(mockOutputWriter)
 			writer.Test(t)
 			app.writer = writer
@@ -93,11 +94,15 @@ func TestApplicationOutputFailures(t *testing.T) {
 				},
 			})
 			if !renderFailure {
+				provider.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
+				writer.On("Validate", first).Return(nil).Once()
+				writer.On("Validate", second).Return(nil).Once()
 				writer.On("Write", first, []byte("generated")).Return(assert.AnError).Once()
 			}
 			err := app.run(context.Background(), path)
 			if renderFailure {
 				require.ErrorContains(t, err, "failed to render template")
+				provider.AssertNotCalled(t, "Discover", mock.Anything, mock.Anything)
 				writer.AssertNotCalled(t, "Write", mock.Anything, mock.Anything)
 			} else {
 				require.ErrorIs(t, err, assert.AnError)

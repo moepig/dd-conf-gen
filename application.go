@@ -18,6 +18,7 @@ type application struct {
 
 // Saves one output, reporting failures to the caller.
 type outputWriter interface {
+	Validate(path string) error
 	Write(path string, content []byte) error
 }
 
@@ -60,6 +61,10 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 	if err != nil {
 		return nil, err
 	}
+	preparedOutputs, err := app.prepareOutputs(ctx, genCfg.Outputs, filepath.Dir(configPath))
+	if err != nil {
+		return nil, err
+	}
 
 	// Discover resources for each resource config
 	logging.FromContext(ctx).Info("Discovering resources")
@@ -89,10 +94,9 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 
 	// Render templates and write output files
 	logging.FromContext(ctx).Info("Generating output files")
-	rend := renderer.NewRenderer()
-
 	var outputs []generatedOutput
-	for _, outCfg := range genCfg.Outputs {
+	for _, prepared := range preparedOutputs {
+		outCfg := prepared.config
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -109,15 +113,8 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 			Resources: discoveredResources,
 		}
 
-		// Resolve template path (relative to generation config file)
-		templatePath := outCfg.Template
-		if !filepath.IsAbs(templatePath) {
-			configDir := filepath.Dir(configPath)
-			templatePath = filepath.Join(configDir, templatePath)
-		}
-
 		// Render template
-		output, err := rend.RenderContext(ctx, templatePath, templateData)
+		output, err := prepared.template.RenderContext(ctx, templateData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", outCfg.OutputFile, err)
 		}
@@ -150,4 +147,35 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 		requests = append(requests, resourceRequest{name: resource.Name, provider: provider, config: cfg})
 	}
 	return requests, nil
+}
+
+type preparedOutput struct {
+	config   config.OutputConfig
+	template *renderer.CompiledTemplate
+}
+
+// Parses all templates and validates destinations before resource discovery, without writing outputs.
+func (app *application) prepareOutputs(ctx context.Context, outputs []config.OutputConfig, configDir string) ([]preparedOutput, error) {
+	rend := renderer.NewRenderer()
+	prepared := make([]preparedOutput, 0, len(outputs))
+	for _, out := range outputs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		path := out.Template
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(configDir, path)
+		}
+		template, err := rend.CompileContext(ctx, path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to render template for '%s': %w", out.OutputFile, err)
+		}
+		prepared = append(prepared, preparedOutput{config: out, template: template})
+	}
+	for _, out := range outputs {
+		if err := app.writer.Validate(out.OutputFile); err != nil {
+			return nil, fmt.Errorf("invalid output file '%s': %w", out.OutputFile, err)
+		}
+	}
+	return prepared, nil
 }

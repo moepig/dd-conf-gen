@@ -80,3 +80,17 @@ func TestFileWriterInvalidDestination(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, files)
 }
+
+// Destination preflight must reject invalid paths and leave missing directories uncreated.
+func TestFileWriterValidate(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "missing", "out.yaml")
+	w := FileWriter{}
+	require.NoError(t, w.Validate(path))
+	assert.NoDirExists(t, filepath.Dir(path))
+	require.Error(t, w.Validate(dir))
+	file := filepath.Join(dir, "parent")
+	require.NoError(t, os.WriteFile(file, nil, 0600))
+	require.Error(t, w.Validate(filepath.Join(file, "child.yaml")))
+}

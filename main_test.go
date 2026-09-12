@@ -142,14 +142,16 @@ func TestRunFailures(t *testing.T) {
 				expectedError = "failed to execute template"
 			case "output directory error":
 				cfg.Outputs[0].OutputFile = filepath.Join(output, "child.yaml")
-				expectedError = "failed to write output file"
+				expectedError = "invalid output file"
 			case "output file error":
 				cfg.Outputs[0].OutputFile = dir
-				expectedError = "failed to write output file"
+				expectedError = "invalid output file"
 			}
 			if name != "invalid config" && name != "unknown provider" && name != "duplicate output" {
 				p.On("ValidateConfig", mock.Anything).Return(nil).Once()
-				p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
+				if name == "discovery error" || name == "execution error" {
+					p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
+				}
 			}
 			err := app.run(context.Background(), writeRunConfig(t, dir, cfg))
 			require.ErrorContains(t, err, expectedError)
