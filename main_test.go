@@ -103,7 +103,7 @@ func TestRunGeneratesOutputs(t *testing.T) {
 
 // Discovery and rendering errors must leave an existing output intact; filesystem errors must be returned.
 func TestRunFailures(t *testing.T) {
-	for _, name := range []string{"invalid config", "unknown provider", "discovery error", "missing template", "invalid template", "execution error", "output directory error", "output file error"} {
+	for _, name := range []string{"invalid config", "duplicate output", "unknown provider", "discovery error", "missing template", "invalid template", "execution error", "output directory error", "output file error"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			app, p := newTestApplication(t)
@@ -119,6 +119,9 @@ func TestRunFailures(t *testing.T) {
 			var discoverErr error
 			var expectedError string
 			switch name {
+			case "duplicate output":
+				cfg.Outputs = append(cfg.Outputs, cfg.Outputs[0])
+				expectedError = "duplicate output_file"
 			case "invalid config":
 				cfg.Resources = nil
 				expectedError = "failed to load generation config"
@@ -144,7 +147,7 @@ func TestRunFailures(t *testing.T) {
 				cfg.Outputs[0].OutputFile = dir
 				expectedError = "failed to write output file"
 			}
-			if name != "invalid config" && name != "unknown provider" {
+			if name != "invalid config" && name != "unknown provider" && name != "duplicate output" {
 				p.On("ValidateConfig", mock.Anything).Return(nil).Once()
 				p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
 			}

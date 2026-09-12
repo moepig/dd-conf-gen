@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -220,6 +221,30 @@ outputs:
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse generation config")
 	})
+}
+
+// Duplicate output destinations must be rejected, including relative paths and existing symlink ancestors.
+func TestDuplicateOutputPaths(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "alias")
+	require.NoError(t, os.Symlink(dir, link))
+	abs := filepath.Join(dir, "nested", "out.yaml")
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	rel, err := filepath.Rel(cwd, abs)
+	require.NoError(t, err)
+	for _, second := range []string{abs, dir + "/nested/../nested/out.yaml", rel, filepath.Join(link, "nested", "out.yaml")} {
+		t.Run(second, func(t *testing.T) {
+			cfg := &GenConfig{
+				Resources: []ResourceConfig{{Name: "redis", Type: "elasticache_redis", Region: "us-east-1"}},
+				Outputs: []OutputConfig{
+					{Template: "redis.tmpl", OutputFile: abs, Data: OutputData{ResourceName: "redis"}},
+					{Template: "redis.tmpl", OutputFile: second, Data: OutputData{ResourceName: "redis"}},
+				},
+			}
+			require.ErrorContains(t, validateGenConfig(cfg), "duplicate output_file")
+		})
+	}
 }
 
 func createTempFile(t *testing.T, content string) string {

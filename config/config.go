@@ -3,9 +3,10 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/moepig/dd-conf-gen/internal/logging"
 	"os"
+	"path/filepath"
 
+	"github.com/moepig/dd-conf-gen/internal/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,6 +65,7 @@ func validateGenConfig(cfg *GenConfig) error {
 	}
 
 	// Validate outputs
+	outputPaths := make(map[string]int)
 	for i, out := range cfg.Outputs {
 		if out.Template == "" {
 			return fmt.Errorf("output[%d]: template is required", i)
@@ -71,6 +73,14 @@ func validateGenConfig(cfg *GenConfig) error {
 		if out.OutputFile == "" {
 			return fmt.Errorf("output[%d]: output_file is required", i)
 		}
+		path, err := canonicalOutputPath(out.OutputFile)
+		if err != nil {
+			return fmt.Errorf("output[%d]: invalid output_file: %w", i, err)
+		}
+		if previous, ok := outputPaths[path]; ok {
+			return fmt.Errorf("output[%d]: duplicate output_file with output[%d]: %s", i, previous, out.OutputFile)
+		}
+		outputPaths[path] = i
 		if out.Data.ResourceName == "" {
 			return fmt.Errorf("output[%d]: data.resource_name is required", i)
 		}
@@ -81,4 +91,28 @@ func validateGenConfig(cfg *GenConfig) error {
 	}
 
 	return nil
+}
+
+// Normalizes an output path and resolves existing symlink ancestors for duplicate detection.
+func canonicalOutputPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	current, suffix := abs, ""
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			return filepath.Join(resolved, suffix), nil
+		}
+		if !os.IsNotExist(err) {
+			return abs, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return abs, nil
+		}
+		suffix = filepath.Join(filepath.Base(current), suffix)
+		current = parent
+	}
 }
