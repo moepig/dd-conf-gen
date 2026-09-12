@@ -66,7 +66,7 @@ func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) (
 
 	// Extract tag filters from config
 	tags := settings.tags
-	logging.FromContext(ctx).Debug("Extracted tag filters", "tag_count", len(tags), "tags", tags)
+	logging.FromContext(ctx).Debug("Extracted tag filters", "tag_count", len(tags))
 
 	// Get replication groups by tags
 	resourceTagMappings, err := p.getReplicationGroupsByTags(ctx, tags)
@@ -75,7 +75,7 @@ func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) (
 	}
 
 	if len(resourceTagMappings) == 0 && len(tags) > 0 {
-		logging.FromContext(ctx).Info("No replication groups found matching tag filters", "tags", tags)
+		logging.FromContext(ctx).Info("No replication groups found matching tag filters", "tag_count", len(tags))
 		return []providers.Resource{}, nil
 	}
 

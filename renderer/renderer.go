@@ -49,7 +49,7 @@ func (r *Renderer) CompileContext(ctx context.Context, templatePath string) (*Co
 		return nil, fmt.Errorf("failed to read template file: %w", err)
 	}
 
-	logging.FromContext(ctx).Debug("Read template file", "path", templatePath, "content", string(content))
+	logging.FromContext(ctx).Debug("Read template file", "path", templatePath, "bytes", len(content))
 
 	// Parse template
 	tmpl, err := template.New("config").Option("missingkey=error").Parse(string(content))

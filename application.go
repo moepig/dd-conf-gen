@@ -78,8 +78,6 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 			"type", request.provider.Type(),
 			"region", request.config.Region)
 
-		logging.FromContext(ctx).Debug("Provider config", "region", request.config.Region, "filters", request.config.Filters)
-
 		discoveredResources, err := request.provider.Discover(ctx, request.config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to discover resources for '%s': %w", request.name, err)
@@ -89,7 +87,6 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		logging.FromContext(ctx).Info("Found resources",
 			"name", request.name,
 			"count", len(discoveredResources))
-		logging.FromContext(ctx).Debug("Resource details", "name", request.name, "resources", discoveredResources)
 	}
 
 	// Render templates and write output files
@@ -119,7 +116,7 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 			return nil, fmt.Errorf("failed to render template for '%s': %w", outCfg.OutputFile, err)
 		}
 
-		logging.FromContext(ctx).Debug("Rendered output", "output_file", outCfg.OutputFile, "content", string(output))
+		logging.FromContext(ctx).Debug("Rendered output", "output_file", outCfg.OutputFile, "bytes", len(output))
 
 		outputs = append(outputs, generatedOutput{path: outCfg.OutputFile, content: output})
 	}

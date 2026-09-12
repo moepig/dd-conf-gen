@@ -59,6 +59,31 @@ func writeRunConfig(t *testing.T, dir string, cfg config.GenConfig) string {
 	return path
 }
 
+// Captures debug logs with mocked sensitive data and requires successful output without dumping contents or filters.
+func TestCLIDebugDoesNotDumpSensitiveData(t *testing.T) {
+	t.Parallel()
+	app, p := newTestApplication(t)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "redis.tmpl"), []byte(`password: DUMMY_TEMPLATE_SECRET
+{{range .Resources}}{{index .Metadata "password"}}{{end}}`), 0600))
+	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Discover", mock.Anything, mock.Anything).Return([]providers.Resource{{Metadata: map[string]interface{}{"password": "DUMMY_RESOURCE_SECRET"}}}, nil).Once()
+	path := writeRunConfig(t, dir, config.GenConfig{
+		Resources: []config.ResourceConfig{{Name: "redis", Type: p.Type(), Region: "us-east-1", Filters: map[string]interface{}{"tags": map[string]interface{}{"secret": "DUMMY_FILTER_SECRET"}}}},
+		Outputs:   []config.OutputConfig{{Template: "redis.tmpl", OutputFile: filepath.Join(dir, "out.yaml"), Data: config.OutputData{ResourceName: "redis"}}},
+	})
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, app.runCLI(context.Background(), []string{"-config", path, "-log-level", "debug"}, &stdout, &stderr), stderr.String())
+	for _, secret := range []string{"DUMMY_TEMPLATE_SECRET", "DUMMY_RESOURCE_SECRET", "DUMMY_FILTER_SECRET"} {
+		assert.NotContains(t, stderr.String(), secret)
+	}
+	assert.Contains(t, stderr.String(), "Rendered output")
+	data, err := os.ReadFile(filepath.Join(dir, "out.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "DUMMY_TEMPLATE_SECRET")
+	assert.Contains(t, string(data), "DUMMY_RESOURCE_SECRET")
+}
+
 // Uses mocked discovery to verify region/filter forwarding, resource selection, template paths, and output creation.
 func TestRunGeneratesOutputs(t *testing.T) {
 	t.Parallel()

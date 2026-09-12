@@ -38,7 +38,7 @@ func LoadGenConfigContext(ctx context.Context, path string) (*GenConfig, error) 
 		return nil, fmt.Errorf("generation config must contain exactly one YAML document")
 	}
 
-	logging.FromContext(ctx).Debug("Loaded generation config", "config", cfg)
+	logging.FromContext(ctx).Debug("Loaded generation config", "resources_count", len(cfg.Resources), "outputs_count", len(cfg.Outputs))
 
 	if err := validateGenConfig(&cfg); err != nil {
 		return nil, fmt.Errorf("invalid generation config: %w", err)
