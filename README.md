@@ -1,247 +1,35 @@
 # dd-conf-gen
 
-Datadog Agent チェック設定ファイルを生成する CLI ツールである。
+AWS の Aurora MySQL と ElastiCache for Redis を検索し、Datadog Agent の DBM・Redis integration 用チェック設定を生成する CLI ツールである。
 
-## 概要
+## アプローチ
 
-ECS 上の datadog/agent をベースとする独自イメージで、Agent 起動前にクラウドリソースを検索し、DBM と Redis integration のチェック設定を生成する。タグ条件と Go テンプレートで接続先、タグ、シークレット参照名を決定する。認証情報の値は Datadog Agent が取得する。
+タグ条件で監視対象を選び、取得した接続先とメタデータを Go テンプレートへ渡して設定ファイルを生成する。複数リージョンの集約や、ロールごとの出力にも対応する。認証情報は ENC 参照として出力し、値の取得は Datadog Agent が行う。
 
-## 設計
+ECS 上の Datadog Agent を含む独自イメージで、Agent 起動前に実行する構成を想定する。設定生成に成功してから Agent を起動する。監視対象や設定を変更した場合は、再実行して Agent に設定を再適用する。
 
-実行構成、処理の分担、設定更新時の動作は、[設定生成の設計](docs/architecture.md) を参照。Agent のシークレット設定と条件別の参照方法は、[Agent によるシークレット参照](docs/secrets.md) を参照。
+## 使い方
 
-## インストール
+Go でインストールするコマンドを、以下に示す。
 
 ```bash
 go install github.com/moepig/dd-conf-gen@latest
 ```
 
-または、リポジトリをクローンしてビルド:
-
-```bash
-git clone https://github.com/moepig/dd-conf-gen.git
-cd dd-conf-gen
-go build -o dd-conf-gen
-```
-
-## 使い方
-
-### 基本的な使い方
+生成設定とテンプレートを用意し、リージョン、タグ条件、出力先を指定する。AWS の検索権限と Agent のシークレット設定を整え、以下のコマンドを実行する。
 
 ```bash
 dd-conf-gen -config gen-config.yaml
 ```
 
-実行期限の既定値は 5 分である。`-timeout` に正の期間を指定して変更する。実行期限に達した場合、または `SIGINT`・`SIGTERM` を受信した場合、検索をキャンセルして新しい保存を開始せず、終了コード 1 で終了する。実行中のファイル I/O は完了まで中断されない。
+生成設定とテンプレートの組み合わせは、[利用例](docs/examples.md) を参照。
 
-テンプレート生成は実行前後と生成データの書き込み時にキャンセルを確認し、途中結果を破棄する。書き込みを伴わないテンプレート処理の実行中は、即時中断を保証しない。
+## ドキュメント
 
-実行期限を 30 秒に設定する例を、以下に示す。
+目的別の詳細資料を、以下に示す。
 
-```bash
-dd-conf-gen -config gen-config.yaml -timeout 30s
-```
-
-### ログレベル
-
-`-log-level` は `debug`・`info`・`warn`・`error` を大文字小文字の区別なく受け付ける。`INFO+2` のような数値オフセットも指定できる。既定値は `info` である。不正な値は CLI 引数の解析エラーとして終了コード 2 を返す。`-version` と併用した場合も引数の値を検証する。
-
-### 生成設定ファイルの構造
-
-生成設定ファイルは単一の YAML ドキュメントとして記述する。未定義の設定項目や複数の YAML ドキュメントはエラーとする。
-
-#### トップレベル項目
-
-| 項目        | 型    | 必須 | 説明                                |
-| ----------- | ----- | ---- | ----------------------------------- |
-| `resources` | array | ○    | リソース定義のリスト（最低1つ必要） |
-| `outputs`   | array | ○    | 出力定義のリスト（最低1つ必要）     |
-
-#### resources 項目
-
-各リソース定義には以下の項目を指定します:
-
-| 項目           | 型     | 必須 | 説明                                                  |
-| -------------- | ------ | ---- | ----------------------------------------------------- |
-| `name`         | string | ○    | リソースの識別子（outputs から参照される）            |
-| `type`         | string | ○    | リソースプロバイダーの種別（例: `elasticache_redis`） |
-| `region`       | string | ○    | AWS リージョン（例: `ap-northeast-1`）                |
-| `filters.tags` | map    | -    | タグによる完全一致の AND 条件 |
-| `filters.tag_conditions` | array | - | 候補値、除外、存在・不在によるタグ条件 |
-
-#### outputs 項目
-
-各出力定義には以下の項目を指定します:
-
-| 項目                 | 型     | 必須 | 説明                                                 |
-| -------------------- | ------ | ---- | ---------------------------------------------------- |
-| `template`           | string | ○    | テンプレートファイルのパス（相対パスまたは絶対パス） |
-| `output_file`        | string | ○    | 出力先ファイルのパス                                 |
-| `on_empty` | string | | 検索結果が 0 件の場合の動作。既定値は `render` |
-| `data.resource_name` | string | 条件付き | 使用するリソース定義の名前 |
-| `data.resource_names` | array | 条件付き | 集約するリソース定義の名前のリスト |
-
-`data.resource_name` または空でない `data.resource_names` のどちらか一方を指定する。同じリソース定義の重複参照はエラーとする。複数定義を参照する場合、ホスト名とポート番号が同じリソースは最初の定義を優先して 1 件にまとめ、ホスト名、ポート番号の順に並べる。タグとメタデータは優先されたリソースの値を使用する。1 定義のみの参照では、検索結果の順序と件数を保持する。
-
-東京と大阪の検索結果を集約する出力定義を、以下に示す。`resources` には `tokyo_redis` と `osaka_redis` をそれぞれのリージョンで定義する。
-
-```yaml
-outputs:
-  - template: templates/redis.yaml.tmpl
-    output_file: /etc/datadog-agent/conf.d/redisdb.d/conf.yaml
-    data:
-      resource_names: [tokyo_redis, osaka_redis]
-```
-
-#### 設定例
-
-```yaml
-resources:
-  - name: production_redis_nodes
-    type: elasticache_redis
-    region: ap-northeast-1
-    filters:
-      tags:
-        Environment: Production
-        Service: api
-
-outputs:
-  - template: templates/redis.yaml.tmpl
-    output_file: /etc/datadog-agent/conf.d/redisdb.yaml
-    data:
-      resource_name: production_redis_nodes
-```
-
-複数リージョンの集約、タグ条件、ロール別の出力、シークレット参照の設定例は、[利用例](examples/README.md) を参照。
-
-### リソース設定の検証
-
-検索を開始する前に、全リソースのプロバイダー登録と設定を検証する。設定に不備がある場合、クラウド API を呼び出さずにエラーで終了する。
-
-テンプレートの読み込みと構文解析、既存の出力先のファイル種別とシンボリックリンクの検証も検索前に行う。解析したテンプレートを検索後の生成に使用する。書き込み権限や空き容量、検証後のファイルシステム変更によるエラーは保存時に判定する。
-
-出力先はシンボリックリンクを解決してから `..` を処理し、絶対パスとして保持する。同じ出力先を複数の出力定義で指定してはいけない。保存には検証済みのパスを使用し、そのパスのシンボリックリンクによる転送先が変化した場合はエラーとする。検証後に元のエイリアスだけを変更しても、保存先は変わらない。保存処理と同時に行われる外部からのファイルシステム変更に対する排他制御は行わない。
-
-ElastiCache と Aurora MySQL のフィルターは `filters.tags` と `filters.tag_conditions` を受け付ける。タグ値は文字列で指定すること。数値や真偽値として解釈される YAML の値は引用符で囲む必要がある。未対応のフィルター名や文字列以外のタグ値はエラーとする。
-
-### タグ条件
-
-`filters.tag_conditions` の条件はすべて AND で結合し、`filters.tags` と併用した場合は両方を満たすリソースを選択する。対象は ElastiCache のレプリケーショングループタグと Aurora のクラスタータグである。キーと値は大文字小文字を区別する。
-
-各条件は `key` と `operator` を指定する。演算子と `values` の指定方法を、以下に示す。
-
-| `operator` | `values` | 一致条件 |
-| --- | --- | --- |
-| `in` | 空でない文字列リスト | タグが存在し、値が候補のいずれかと完全一致する |
-| `not_in` | 空でない文字列リスト | タグが存在しない、または値が候補のどれとも一致しない |
-| `exists` | 指定禁止 | タグが存在する。空文字列の値も含む |
-| `not_exists` | 指定禁止 | タグが存在しない |
-
-本番または検証環境から、監視除外タグのある対象を除く条件を、以下に示す。
-
-```yaml
-filters:
-  tag_conditions:
-    - key: env
-      operator: in
-      values: [prod, staging]
-    - key: monitoring-disabled
-      operator: not_exists
-```
-
-タグ条件は取得したタグに対して判定する。`filters.tags` を省略した検索はタグのないリソースも評価するため、除外条件のみの検索も使用できる。
-
-### 出力ファイルの更新
-
-すべてのテンプレートの生成に成功した後、出力定義の順にファイルを保存する。生成中にエラーが発生した場合、出力ファイルは更新しない。
-
-各ファイルは出力先と同じディレクトリに作成した一時ファイルから置換する。既存ファイルのアクセス権を引き継ぐ。既存のシンボリックリンクはリンク先を更新する。リンク先が存在しないシンボリックリンクはエラーとする。
-
-新規ファイルのアクセス権は `0644` にプロセスの `umask` を適用する。既存ファイルのパーミッションビットは保持する。所有者・ACL・拡張属性の保持は保証しない。
-
-保存中にエラーが発生した場合、その時点で処理を終了する。先に保存が完了したファイルは更新済みとなるため、複数ファイル全体の更新は不可分ではない。
-
-### 検索結果が 0 件の場合
-
-`outputs[].on_empty` は、出力に使用する検索結果の集約後、テンプレートでの絞り込み前の件数に適用する。動作を、以下に示す。
-
-| 値 | 動作 |
-| --- | --- |
-| `render` | 空の `.Resources` を渡して生成し、保存する。既定の動作である |
-| `error` | エラーで終了し、すべての出力ファイルを更新しない |
-| `keep` | その出力の生成と保存を省略する。既存ファイルを保持し、新規ファイルは作成しない |
-
-`keep` の場合も、テンプレートと出力先の事前検証を行う。AWS API のエラーは 0 件と扱わず、通常どおり処理全体を失敗とする。テンプレート内の条件で全件を除外した場合は `on_empty` の対象にならない。
-
-必須の監視対象が見つからない場合に更新を中止する設定を、以下に示す。
-
-```yaml
-outputs:
-  - template: templates/redis.yaml.tmpl
-    output_file: /etc/datadog-agent/conf.d/redisdb.d/conf.yaml
-    on_empty: error
-    data:
-      resource_name: production_redis_nodes
-```
-
-### テンプレートの基本
-
-Datadog チェック設定テンプレートは Go の `text/template` 形式で記述します。
-
-`.Tags.env` や `.Metadata.ClusterName` のような参照でキーが存在しない場合、生成をエラーで終了する。任意のタグは `index` と `if` を組み合わせて参照すること。`index` による参照は欠損キーのエラー対象に含まれない。
-
-**テンプレートで利用可能なデータ:**
-
-- `.Resources`: リソースプロバイダーから取得したリソースのスライス
-  - `.Host`: ホスト名またはエンドポイント
-  - `.Port`: ポート番号
-  - `.Tags`: リソースのタグ（map[string]string）
-  - `.Metadata`: リソース種別固有の追加データ（map[string]interface{}）
-
-詳細な使い方は、各リソースプロバイダーのドキュメントを参照してください。
-
-`quote` 関数は文字列を二重引用符付きの YAML スカラーへ変換する。テンプレートで生成した ENC 参照は解決せず、そのまま保存する。配布テンプレートは Agent のシークレットバックエンドによる値の取得を前提とする。条件別の認証情報の選択は、[Agent によるシークレット参照](docs/secrets.md) を参照。
-
-## サポートしているリソースプロバイダー
-
-各リソースプロバイダーの詳細（取得できるデータ、設定例、テンプレート例）については、以下のドキュメントを参照してください:
-
-| リソース種別        | 説明                      | ドキュメント                                                       |
-| ------------------- | ------------------------- | ------------------------------------------------------------------ |
-| `elasticache_redis` | AWS ElastiCache for Redis | [providers/elasticache/README.md](providers/elasticache/README.md) |
-| `aurora_mysql` | AWS Aurora MySQL | [providers/aurora/README.md](providers/aurora/README.md) |
-
-Aurora MySQL はクラスターのタグで検索し、各 DB インスタンスのエンドポイントを取得する。実行可能な生成設定例は、[examples/gen-config-aurora-mysql.yaml](examples/gen-config-aurora-mysql.yaml) を参照。
-
-## 開発
-
-### テストの実行
-
-```bash
-# 全てのテストを実行
-go test ./... -v
-
-# 短いテストのみ実行（モックを使用したユニットテストのみ）
-go test ./... -short -v
-
-# カバレッジを確認
-go test ./... -short -cover
-```
-
-### 新しいリソースプロバイダーの追加
-
-新しいリソースプロバイダーの追加手順を、以下に示す。
-
-1. `providers/<provider_name>/` ディレクトリを作成
-2. `providers.Provider` インターフェースを実装
-3. `main.go` の `providers.NewRegistry` に渡すマップへリソース種別とプロバイダーの生成関数を追加
-4. ドキュメント（README.md）を作成
-
-プロバイダーの登録内容は `Registry` の構築時にコピーし、構築後は変更しない。生成関数はリソース定義ごとに呼び出され、プロバイダーを生成する。並行した検索に使用する場合、生成関数自体も並行呼び出しに対応すること。テストではモックを返す生成関数で専用のインスタンスを構築してアプリケーションへ渡す。ElastiCache の API モックは `NewProviderWithClients` で注入できる。
-
-`Prepare` は外部アクセスや入力設定の変更を行わず、プロバイダー内部の型付き設定に変換する。変換した設定の独立したコピーを保持する `providers.Discovery` 関数を返すこと。不正な設定はエラーとし、成功時に `nil` の関数を返してはいけない。検索処理はこの関数に `context.Context` を渡して実行する。
-
-実装の詳細は、既存の実装を参考にしてください:
-
-- [providers/elasticache/provider.go](providers/elasticache/provider.go) - 実装例
-- [providers/elasticache/README.md](providers/elasticache/README.md) - ドキュメント例
+- [インストールと CLI](docs/usage.md)
+- [生成設定とテンプレート](docs/configuration.md)
+- [設定生成の設計](docs/architecture.md)
+- [Agent によるシークレット参照](docs/secrets.md)
+- [開発](docs/development.md)

@@ -22,7 +22,7 @@ ElastiCache Redis プロバイダーは、AWS ElastiCache for Redis のレプリ
   - レプリケーショングループに付与されているタグでフィルタリングします
   - 複数のタグを指定した場合、すべてのタグが一致するリソースのみが取得されます（AND 条件）
 
-候補値の OR、除外、タグの存在・不在は `filters.tag_conditions` で指定する。条件の詳細は、[タグ条件](../../README.md#タグ条件) を参照。
+候補値の OR、除外、タグの存在・不在は `filters.tag_conditions` で指定する。条件の詳細は、[タグ条件](../configuration.md#タグ条件) を参照。
 
 ## 取得されるリソース情報
 
