@@ -133,9 +133,9 @@ instances:
    - `Discover(ctx, config) ([]providers.Resource, error)`: リソースを検索
    - `ValidateConfig(config) error`: 設定をバリデーション
 3. `provider_test.go` を作成し、モックを使用したユニットテストを実装
-4. `main.go` で生成する `providers.Registry` にプロバイダーを登録
+4. `main.go` の `providers.Registry` に、リソース種別とプロバイダーの生成関数を登録
    ```go
-   registry.Register(rds.NewProvider())
+   registry.Register("rds_mysql", func() providers.Provider { return rds.NewProvider() })
    ```
 5. ドキュメント（README.md）にリソース種別の説明を追加
 

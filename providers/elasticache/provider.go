@@ -39,6 +39,11 @@ func NewProvider() *Provider {
 	return &Provider{}
 }
 
+// Creates a provider with injected API clients. Missing clients are created for the requested discovery region.
+func NewProviderWithClients(elasticacheClient ElastiCacheAPI, taggingClient ResourceGroupsTaggingAPI) *Provider {
+	return &Provider{elasticacheClient: elasticacheClient, taggingClient: taggingClient}
+}
+
 // Type returns the resource type handled by this provider
 func (p *Provider) Type() string {
 	return providerType

@@ -71,7 +71,7 @@ func TestProvider_DiscoverClusterMode(t *testing.T) {
 		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
 			tagging := new(MockResourceGroupsTaggingClient)
 			client := new(MockElastiCacheClient)
-			p := &Provider{taggingClient: tagging, elasticacheClient: client}
+			p := NewProviderWithClients(client, tagging)
 			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
 				ResourceTagMappingList: []taggingtypes.ResourceTagMapping{{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:cluster")}},
 			}, nil).Once()
@@ -95,9 +95,7 @@ func TestProvider_DiscoverClusterMode(t *testing.T) {
 func TestProvider_DiscoverRejectsInvalidTagValues(t *testing.T) {
 	for _, value := range []interface{}{123, true, nil, []interface{}{"prod"}, map[string]interface{}{"env": "prod"}} {
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
-			provider := NewProvider()
-			provider.taggingClient = new(MockResourceGroupsTaggingClient)
-			provider.elasticacheClient = new(MockElastiCacheClient)
+			provider := NewProviderWithClients(new(MockElastiCacheClient), new(MockResourceGroupsTaggingClient))
 			_, err := provider.Discover(context.Background(), providers.ProviderConfig{
 				Region:  "us-east-1",
 				Filters: map[string]interface{}{"tags": map[string]interface{}{"env": value}},
@@ -112,7 +110,7 @@ func TestProvider_GetReplicationGroupsByTagsPagination(t *testing.T) {
 	for _, failSecondPage := range []bool{false, true} {
 		t.Run(fmt.Sprintf("second page error=%t", failSecondPage), func(t *testing.T) {
 			client := new(MockResourceGroupsTaggingClient)
-			provider := &Provider{taggingClient: client}
+			provider := NewProviderWithClients(nil, client)
 			ctx := context.Background()
 			first := taggingtypes.ResourceTagMapping{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:first")}
 			second := taggingtypes.ResourceTagMapping{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:second")}
@@ -152,7 +150,7 @@ func TestProvider_GetReplicationGroupsByTagsEmptyPage(t *testing.T) {
 	for _, repeated := range []bool{false, true} {
 		t.Run(fmt.Sprintf("repeated token=%t", repeated), func(t *testing.T) {
 			client := new(MockResourceGroupsTaggingClient)
-			provider := &Provider{taggingClient: client}
+			provider := NewProviderWithClients(nil, client)
 			client.On("GetResources", mock.Anything, mock.MatchedBy(func(input *resourcegroupstaggingapi.GetResourcesInput) bool {
 				return aws.ToString(input.PaginationToken) == ""
 			}), mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{PaginationToken: aws.String("next")}, nil).Once()
@@ -199,7 +197,7 @@ func TestProvider_DiscoverWithInjectedClients(t *testing.T) {
 	client := new(MockResourceGroupsTaggingClient)
 	client.On("GetResources", mock.Anything, mock.Anything, mock.Anything).
 		Return(&resourcegroupstaggingapi.GetResourcesOutput{}, nil).Once()
-	provider := &Provider{taggingClient: client, elasticacheClient: new(MockElastiCacheClient)}
+	provider := NewProviderWithClients(new(MockElastiCacheClient), client)
 	_, err := provider.Discover(context.Background(), providers.ProviderConfig{
 		Region:  "us-east-1",
 		Filters: map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}},
@@ -251,7 +249,7 @@ func TestProvider_DiscoverWithoutTagFilters(t *testing.T) {
 		t.Run(fmt.Sprint(filters), func(t *testing.T) {
 			tagging := new(MockResourceGroupsTaggingClient)
 			client := new(MockElastiCacheClient)
-			provider := &Provider{taggingClient: tagging, elasticacheClient: client}
+			provider := NewProviderWithClients(client, tagging)
 			taggedARN := "arn:aws:elasticache:us-east-1:123456789012:replicationgroup:tagged"
 			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
 				ResourceTagMappingList: []taggingtypes.ResourceTagMapping{{
@@ -311,7 +309,7 @@ func TestProvider_DiscoverOnlyUntaggedResources(t *testing.T) {
 			}}}},
 		}},
 	}, nil).Once()
-	provider := &Provider{taggingClient: tagging, elasticacheClient: client}
+	provider := NewProviderWithClients(client, tagging)
 	result, err := provider.Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1"})
 	require.NoError(t, err)
 	require.Len(t, result, 1)
@@ -327,7 +325,7 @@ func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tagging := new(MockResourceGroupsTaggingClient)
 			client := new(MockElastiCacheClient)
-			provider := &Provider{taggingClient: tagging, elasticacheClient: client}
+			provider := NewProviderWithClients(client, tagging)
 			var taggingOutput *resourcegroupstaggingapi.GetResourcesOutput
 			expectedError := "empty response getting resources"
 			if name != "nil tagging response" {
@@ -360,7 +358,7 @@ func TestProvider_DescribeReplicationGroupsPaginationFailure(t *testing.T) {
 	for _, name := range []string{"API error", "nil response", "repeated marker"} {
 		t.Run(name, func(t *testing.T) {
 			client := new(MockElastiCacheClient)
-			provider := &Provider{elasticacheClient: client}
+			provider := NewProviderWithClients(client, nil)
 			client.On("DescribeReplicationGroups", mock.Anything, mock.MatchedBy(func(input *elasticache.DescribeReplicationGroupsInput) bool {
 				return aws.ToString(input.Marker) == ""
 			}), mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
@@ -439,9 +437,7 @@ func TestProvider_Discover(t *testing.T) {
 		mockElastiCache := new(MockElastiCacheClient)
 		ctx := context.Background()
 
-		provider := NewProvider()
-		provider.taggingClient = mockTagging
-		provider.elasticacheClient = mockElastiCache
+		provider := NewProviderWithClients(mockElastiCache, mockTagging)
 
 		// Setup mocks
 		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
@@ -513,9 +509,7 @@ func TestProvider_Discover(t *testing.T) {
 		mockElastiCache := new(MockElastiCacheClient)
 		ctx := context.Background()
 
-		provider := NewProvider()
-		provider.taggingClient = mockTagging
-		provider.elasticacheClient = mockElastiCache
+		provider := NewProviderWithClients(mockElastiCache, mockTagging)
 
 		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
 			ResourceTagMappingList: []taggingtypes.ResourceTagMapping{},
@@ -544,9 +538,7 @@ func TestProvider_Discover(t *testing.T) {
 		mockElastiCache := new(MockElastiCacheClient)
 		ctx := context.Background()
 
-		provider := NewProvider()
-		provider.taggingClient = mockTagging
-		provider.elasticacheClient = mockElastiCache
+		provider := NewProviderWithClients(mockElastiCache, mockTagging)
 
 		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
 			ResourceTagMappingList: []taggingtypes.ResourceTagMapping{
@@ -622,9 +614,7 @@ func TestProvider_Discover(t *testing.T) {
 		mockElastiCache := new(MockElastiCacheClient)
 		ctx := context.Background()
 
-		provider := NewProvider()
-		provider.taggingClient = mockTagging
-		provider.elasticacheClient = mockElastiCache
+		provider := NewProviderWithClients(mockElastiCache, mockTagging)
 
 		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
 			ResourceTagMappingList: []taggingtypes.ResourceTagMapping{
@@ -704,9 +694,7 @@ func TestProvider_Discover(t *testing.T) {
 		mockTagging := new(MockResourceGroupsTaggingClient)
 		ctx := context.Background()
 
-		provider := NewProvider()
-		provider.taggingClient = mockTagging
-		provider.elasticacheClient = new(MockElastiCacheClient)
+		provider := NewProviderWithClients(new(MockElastiCacheClient), mockTagging)
 
 		// Mock GetResources to return an error
 		mockTagging.On("GetResources", ctx, mock.Anything, mock.Anything).Return(nil, assert.AnError)
@@ -732,9 +720,7 @@ func TestProvider_Discover(t *testing.T) {
 		mockElastiCache := new(MockElastiCacheClient)
 		ctx := context.Background()
 
-		provider := NewProvider()
-		provider.taggingClient = mockTagging
-		provider.elasticacheClient = mockElastiCache
+		provider := NewProviderWithClients(mockElastiCache, mockTagging)
 
 		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
 			ResourceTagMappingList: []taggingtypes.ResourceTagMapping{

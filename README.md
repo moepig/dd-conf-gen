@@ -148,10 +148,10 @@ go test ./... -short -cover
 
 1. `providers/<provider_name>/` ディレクトリを作成
 2. `providers.Provider` インターフェースを実装
-3. `main.go` で生成する `providers.Registry` にプロバイダーを登録
+3. `main.go` の `providers.Registry` にリソース種別とプロバイダーの生成関数を登録
 4. ドキュメント（README.md）を作成
 
-プロバイダーの登録内容は `Registry` のインスタンスごとに独立する。テストでは専用のインスタンスにモックを登録してアプリケーションへ渡す。
+プロバイダーの登録内容は `Registry` のインスタンスごとに独立する。生成関数はリソース定義ごとに呼び出され、プロバイダーを生成する。テストでは専用のインスタンスにモックを返す生成関数を登録してアプリケーションへ渡す。ElastiCache の API モックは `NewProviderWithClients` で注入できる。
 
 `ValidateConfig` は外部アクセスや設定の変更を行わずに検証すること。プロバイダー内部の型付き設定への変換処理を用意し、`ValidateConfig` と `Discover` で共用する。`Discover` 単独でも不正な設定を拒否する必要がある。
 
