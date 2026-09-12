@@ -200,6 +200,9 @@ func TestCLI(t *testing.T) {
 		{name: "missing config", code: 1, stderr: "-config option is required"},
 		{name: "invalid log level", args: []string{"-log-level=invalid"}, code: 1, stderr: "invalid log level 'invalid'"},
 		{name: "unknown flag", args: []string{"-unknown"}, code: 2, stderr: "flag provided but not defined"},
+		{name: "invalid timeout", args: []string{"-timeout=nope"}, code: 2, stderr: "invalid value"},
+		{name: "zero timeout", args: []string{"-timeout=0"}, code: 1, stderr: "-timeout must be positive"},
+		{name: "negative timeout", args: []string{"-timeout=-1s"}, code: 1, stderr: "-timeout must be positive"},
 	}
 	for _, level := range []string{"debug", "info", "warn", "error"} {
 		tests = append(tests, cliTest{name: level, args: []string{"-log-level=" + level, "-config=" + missingConfig}, code: 1, stderr: "failed to read generation config file"})

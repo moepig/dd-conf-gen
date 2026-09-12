@@ -28,11 +28,17 @@ type generatedOutput struct {
 
 // Generates every output, then saves files in configuration order, stopping at the first save failure.
 func (app *application) run(ctx context.Context, configPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	outputs, err := app.generate(ctx, configPath)
 	if err != nil {
 		return err
 	}
 	for _, output := range outputs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := app.writer.Write(output.path, output.content); err != nil {
 			return fmt.Errorf("failed to write output file '%s': %w", output.path, err)
 		}
@@ -59,6 +65,9 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 	logging.FromContext(ctx).Info("Discovering resources")
 	resourceMap := make(map[string][]providers.Resource)
 	for _, request := range requests {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		logging.FromContext(ctx).Info("Discovering resource",
 			"name", request.name,
 			"type", request.provider.Type(),
@@ -84,6 +93,9 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 
 	var outputs []generatedOutput
 	for _, outCfg := range genCfg.Outputs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		logging.FromContext(ctx).Info("Rendering template", "output_file", outCfg.OutputFile)
 
 		// Get resources for this output

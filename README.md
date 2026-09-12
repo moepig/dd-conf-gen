@@ -28,6 +28,14 @@ go build -o dd-conf-gen
 dd-conf-gen -config gen-config.yaml
 ```
 
+実行期限の既定値は 5 分である。`-timeout` に正の期間を指定して変更する。実行期限に達した場合、または `SIGINT`・`SIGTERM` を受信した場合、検索をキャンセルして新しい保存を開始せず、終了コード 1 で終了する。実行中のファイル I/O は完了まで中断されない。
+
+実行期限を 30 秒に設定する例を、以下に示す。
+
+```bash
+dd-conf-gen -config gen-config.yaml -timeout 30s
+```
+
 ### 生成設定ファイルの構造
 
 生成設定ファイルは YAML 形式で記述します。
