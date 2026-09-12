@@ -21,7 +21,16 @@ type OutputConfig struct {
 	Data       OutputData `yaml:"data"`
 }
 
-// Identifies the resource definition selected for an output.
+// Identifies one or more resource definitions selected for an output.
 type OutputData struct {
-	ResourceName string `yaml:"resource_name"`
+	ResourceName  string   `yaml:"resource_name,omitempty"`
+	ResourceNames []string `yaml:"resource_names,omitempty"`
+}
+
+// Returns the selected resource names in configured priority order.
+func (d OutputData) Names() []string {
+	if d.ResourceName != "" {
+		return []string{d.ResourceName}
+	}
+	return d.ResourceNames
 }

@@ -86,12 +86,21 @@ func validateGenConfig(cfg *GenConfig) error {
 		if out.OutputFile == "" {
 			return fmt.Errorf("output[%d]: output_file is required", i)
 		}
-		if out.Data.ResourceName == "" {
-			return fmt.Errorf("output[%d]: data.resource_name is required", i)
+		if out.Data.ResourceName != "" && len(out.Data.ResourceNames) != 0 {
+			return fmt.Errorf("output[%d]: data.resource_name and data.resource_names are mutually exclusive", i)
 		}
-
-		if !resourceNames[out.Data.ResourceName] {
-			return fmt.Errorf("output[%d]: resource_name '%s' not found in resources", i, out.Data.ResourceName)
+		if len(out.Data.Names()) == 0 {
+			return fmt.Errorf("output[%d]: data.resource_name is required when data.resource_names is empty", i)
+		}
+		seen := make(map[string]bool)
+		for _, name := range out.Data.Names() {
+			if !resourceNames[name] {
+				return fmt.Errorf("output[%d]: resource_name '%s' not found in resources", i, name)
+			}
+			if seen[name] {
+				return fmt.Errorf("output[%d]: duplicate resource reference: %s", i, name)
+			}
+			seen[name] = true
 		}
 	}
 

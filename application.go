@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/moepig/dd-conf-gen/config"
 	"github.com/moepig/dd-conf-gen/internal/logging"
@@ -110,10 +111,7 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		}
 		logging.FromContext(ctx).Info("Rendering template", "output_file", path)
 
-		discoveredResources, ok := resourceMap[prepared.resourceName]
-		if !ok {
-			return nil, fmt.Errorf("resource '%s' not found for output '%s'", prepared.resourceName, path)
-		}
+		discoveredResources := selectResources(resourceMap, prepared.resourceNames)
 
 		templateData := renderer.TemplateData{
 			Resources: discoveredResources,
@@ -164,9 +162,9 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 
 // Holds a resource reference, validated destination, and compiled template.
 type preparedOutput struct {
-	resourceName string
-	destination  output.Destination
-	template     *renderer.CompiledTemplate
+	resourceNames []string
+	destination   output.Destination
+	template      *renderer.CompiledTemplate
 }
 
 // Prepares templates and destinations for outputs without writing files.
@@ -186,7 +184,7 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", out.OutputFile, err)
 		}
-		prepared = append(prepared, preparedOutput{resourceName: out.Data.ResourceName, template: template})
+		prepared = append(prepared, preparedOutput{resourceNames: out.Data.Names(), template: template})
 	}
 	paths := make(map[string]int, len(outputs))
 	for i, out := range outputs {
@@ -204,4 +202,33 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		prepared[i].destination = destination
 	}
 	return prepared, nil
+}
+
+// Combines named searches, deduplicating endpoints with the first definition taking precedence and sorting by host and port. A single search retains its original order and duplicates.
+func selectResources(resourceMap map[string][]providers.Resource, names []string) []providers.Resource {
+	if len(names) == 1 {
+		return resourceMap[names[0]]
+	}
+	type endpoint struct {
+		host string
+		port int
+	}
+	seen := make(map[endpoint]bool)
+	var result []providers.Resource
+	for _, name := range names {
+		for _, resource := range resourceMap[name] {
+			key := endpoint{resource.Host, resource.Port}
+			if !seen[key] {
+				seen[key] = true
+				result = append(result, resource)
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Host == result[j].Host {
+			return result[i].Port < result[j].Port
+		}
+		return result[i].Host < result[j].Host
+	})
+	return result
 }

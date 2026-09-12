@@ -156,3 +156,29 @@ func TestApplicationRejectsOutputAliases(t *testing.T) {
 		})
 	}
 }
+
+// Aggregates mocked searches with overlapping endpoints and verifies deduplication, first-definition tags, and deterministic ordering in the saved output.
+func TestApplicationAggregatesResources(t *testing.T) {
+	t.Parallel()
+	app, p := newTestApplication(t)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tmpl"), []byte(`{{range .Resources}}{{.Host}}:{{.Port}}/{{index .Tags "env"}};{{end}}`), 0600))
+	p.On("Prepare", mock.Anything).Return(nil).Twice()
+	p.On("Discover", mock.Anything, mock.MatchedBy(func(c providers.ProviderConfig) bool { return c.Region == "east" })).Return([]providers.Resource{
+		{Host: "z", Port: 2, Tags: map[string]string{"env": "first"}},
+		{Host: "a", Port: 2},
+	}, nil).Once()
+	p.On("Discover", mock.Anything, mock.MatchedBy(func(c providers.ProviderConfig) bool { return c.Region == "west" })).Return([]providers.Resource{
+		{Host: "z", Port: 2, Tags: map[string]string{"env": "second"}},
+		{Host: "a", Port: 1},
+	}, nil).Once()
+	dest := filepath.Join(dir, "out.yaml")
+	path := writeRunConfig(t, dir, config.GenConfig{
+		Resources: []config.ResourceConfig{{Name: "a", Type: p.Type(), Region: "east"}, {Name: "b", Type: p.Type(), Region: "west"}},
+		Outputs:   []config.OutputConfig{{Template: "test.tmpl", OutputFile: dest, Data: config.OutputData{ResourceNames: []string{"a", "b"}}}},
+	})
+	require.NoError(t, app.run(context.Background(), path))
+	data, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	assert.Equal(t, "a:1/;a:2/;z:2/first;", string(data))
+}

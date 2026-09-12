@@ -72,7 +72,20 @@ dd-conf-gen -config gen-config.yaml -timeout 30s
 | -------------------- | ------ | ---- | ---------------------------------------------------- |
 | `template`           | string | ○    | テンプレートファイルのパス（相対パスまたは絶対パス） |
 | `output_file`        | string | ○    | 出力先ファイルのパス                                 |
-| `data.resource_name` | string | ○    | 使用するリソースの識別子（resources の name を参照） |
+| `data.resource_name` | string | 条件付き | 使用するリソース定義の名前 |
+| `data.resource_names` | array | 条件付き | 集約するリソース定義の名前のリスト |
+
+`data.resource_name` または空でない `data.resource_names` のどちらか一方を指定する。同じリソース定義の重複参照はエラーとする。複数定義を参照する場合、ホスト名とポート番号が同じリソースは最初の定義を優先して 1 件にまとめ、ホスト名、ポート番号の順に並べる。タグとメタデータは優先されたリソースの値を使用する。1 定義のみの参照では、検索結果の順序と件数を保持する。
+
+東京と大阪の検索結果を集約する出力定義を、以下に示す。`resources` には `tokyo_redis` と `osaka_redis` をそれぞれのリージョンで定義する。
+
+```yaml
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /etc/datadog-agent/conf.d/redisdb.d/conf.yaml
+    data:
+      resource_names: [tokyo_redis, osaka_redis]
+```
 
 #### 設定例
 

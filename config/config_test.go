@@ -324,3 +324,31 @@ outputs:
 		assert.NotNil(t, cfg.Resources[0].Filters)
 	})
 }
+
+// Loads plural references and rejects ambiguous, duplicate, empty, or unknown selections.
+func TestResourceNames(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, data string
+		valid      bool
+	}{
+		{"plural", "resource_names: [a, b]", true},
+		{"both", "resource_name: a\n      resource_names: [b]", false},
+		{"empty", "resource_names: []", false},
+		{"unknown", "resource_names: [a, missing]", false},
+		{"duplicate", "resource_names: [a, a]", false},
+		{"empty name", "resource_names: [a, '']", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := createTempFile(t, "resources:\n  - {name: a, type: test, region: east}\n  - {name: b, type: test, region: west}\noutputs:\n  - template: test.tmpl\n    output_file: out.yaml\n    data:\n      "+tc.data+"\n")
+			t.Cleanup(func() { require.NoError(t, os.Remove(path)) })
+			cfg, err := LoadGenConfig(path)
+			if tc.valid {
+				require.NoError(t, err)
+				assert.Equal(t, []string{"a", "b"}, cfg.Outputs[0].Data.Names())
+			} else {
+				require.Error(t, err)
+			}
+		})
+	}
+}
