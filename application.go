@@ -7,6 +7,7 @@ import (
 
 	"github.com/moepig/dd-conf-gen/config"
 	"github.com/moepig/dd-conf-gen/internal/logging"
+	"github.com/moepig/dd-conf-gen/output"
 	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/moepig/dd-conf-gen/renderer"
 )
@@ -18,13 +19,13 @@ type application struct {
 
 // Saves one output, reporting failures to the caller.
 type outputWriter interface {
-	Validate(path string) error
-	Write(path string, content []byte) error
+	Prepare(path string) (output.Destination, error)
+	Write(destination output.Destination, content []byte) error
 }
 
 type generatedOutput struct {
-	path    string
-	content []byte
+	destination output.Destination
+	content     []byte
 }
 
 // Generates every output, then saves files in configuration order, stopping at the first save failure.
@@ -40,10 +41,10 @@ func (app *application) run(ctx context.Context, configPath string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := app.writer.Write(output.path, output.content); err != nil {
-			return fmt.Errorf("failed to write output file '%s': %w", output.path, err)
+		if err := app.writer.Write(output.destination, output.content); err != nil {
+			return fmt.Errorf("failed to write output file '%s': %w", output.destination.Path(), err)
 		}
-		logging.FromContext(ctx).Info("Written output file", "path", output.path)
+		logging.FromContext(ctx).Info("Written output file", "path", output.destination.Path())
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -96,16 +97,16 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 	logging.FromContext(ctx).Info("Generating output files")
 	var outputs []generatedOutput
 	for _, prepared := range preparedOutputs {
-		outCfg := prepared.config
+		path := prepared.destination.Path()
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		logging.FromContext(ctx).Info("Rendering template", "output_file", outCfg.OutputFile)
+		logging.FromContext(ctx).Info("Rendering template", "output_file", path)
 
 		// Get resources for this output
-		discoveredResources, ok := resourceMap[outCfg.Data.ResourceName]
+		discoveredResources, ok := resourceMap[prepared.resourceName]
 		if !ok {
-			return nil, fmt.Errorf("resource '%s' not found for output '%s'", outCfg.Data.ResourceName, outCfg.OutputFile)
+			return nil, fmt.Errorf("resource '%s' not found for output '%s'", prepared.resourceName, path)
 		}
 
 		// Prepare template data
@@ -116,12 +117,12 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		// Render template
 		output, err := prepared.template.RenderContext(ctx, templateData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to render template for '%s': %w", outCfg.OutputFile, err)
+			return nil, fmt.Errorf("failed to render template for '%s': %w", path, err)
 		}
 
-		logging.FromContext(ctx).Debug("Rendered output", "output_file", outCfg.OutputFile, "bytes", len(output))
+		logging.FromContext(ctx).Debug("Rendered output", "output_file", path, "bytes", len(output))
 
-		outputs = append(outputs, generatedOutput{path: outCfg.OutputFile, content: output})
+		outputs = append(outputs, generatedOutput{destination: prepared.destination, content: output})
 	}
 	return outputs, nil
 }
@@ -155,8 +156,9 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 }
 
 type preparedOutput struct {
-	config   config.OutputConfig
-	template *renderer.CompiledTemplate
+	resourceName string
+	destination  output.Destination
+	template     *renderer.CompiledTemplate
 }
 
 // Parses all templates and validates destinations before resource discovery, without writing outputs.
@@ -175,12 +177,22 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", out.OutputFile, err)
 		}
-		prepared = append(prepared, preparedOutput{config: out, template: template})
+		prepared = append(prepared, preparedOutput{resourceName: out.Data.ResourceName, template: template})
 	}
-	for _, out := range outputs {
-		if err := app.writer.Validate(out.OutputFile); err != nil {
+	paths := make(map[string]int, len(outputs))
+	for i, out := range outputs {
+		destination, err := app.writer.Prepare(out.OutputFile)
+		if err != nil {
 			return nil, fmt.Errorf("invalid output file '%s': %w", out.OutputFile, err)
 		}
+		if destination.Path() == "" {
+			return nil, fmt.Errorf("empty prepared output destination: %s", out.OutputFile)
+		}
+		if previous, ok := paths[destination.Path()]; ok {
+			return nil, fmt.Errorf("output[%d]: duplicate output_file with output[%d]: %s", i, previous, out.OutputFile)
+		}
+		paths[destination.Path()] = i
+		prepared[i].destination = destination
 	}
 	return prepared, nil
 }

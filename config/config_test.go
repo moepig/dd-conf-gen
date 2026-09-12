@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -249,30 +248,6 @@ outputs:
 	})
 }
 
-// Duplicate output destinations must be rejected, including relative paths and existing symlink ancestors.
-func TestDuplicateOutputPaths(t *testing.T) {
-	dir := t.TempDir()
-	link := filepath.Join(dir, "alias")
-	require.NoError(t, os.Symlink(dir, link))
-	abs := filepath.Join(dir, "nested", "out.yaml")
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	rel, err := filepath.Rel(cwd, abs)
-	require.NoError(t, err)
-	for _, second := range []string{abs, dir + "/nested/../nested/out.yaml", rel, filepath.Join(link, "nested", "out.yaml")} {
-		t.Run(second, func(t *testing.T) {
-			cfg := &GenConfig{
-				Resources: []ResourceConfig{{Name: "redis", Type: "elasticache_redis", Region: "us-east-1"}},
-				Outputs: []OutputConfig{
-					{Template: "redis.tmpl", OutputFile: abs, Data: OutputData{ResourceName: "redis"}},
-					{Template: "redis.tmpl", OutputFile: second, Data: OutputData{ResourceName: "redis"}},
-				},
-			}
-			require.ErrorContains(t, validateGenConfig(cfg), "duplicate output_file")
-		})
-	}
-}
-
 func createTempFile(t *testing.T, content string) string {
 	tmpfile, err := os.CreateTemp("", "meta-config-*.yaml")
 	require.NoError(t, err)
@@ -345,20 +320,4 @@ outputs:
 		require.NoError(t, err)
 		assert.NotNil(t, cfg.Resources[0].Filters)
 	})
-}
-
-// Uses a symlink followed by a parent component to ensure equivalent output destinations are rejected.
-func TestDuplicateOutputAfterSymlinkParent(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "b", "child"), 0700))
-	require.NoError(t, os.Symlink("b/child", filepath.Join(dir, "link")))
-	cfg := &GenConfig{
-		Resources: []ResourceConfig{{Name: "redis", Type: "elasticache_redis", Region: "us-east-1"}},
-		Outputs: []OutputConfig{
-			{Template: "redis.tmpl", OutputFile: dir + "/link/../out.yaml", Data: OutputData{ResourceName: "redis"}},
-			{Template: "redis.tmpl", OutputFile: filepath.Join(dir, "b", "out.yaml"), Data: OutputData{ResourceName: "redis"}},
-		},
-	}
-	require.ErrorContains(t, validateGenConfig(cfg), "duplicate output_file")
 }

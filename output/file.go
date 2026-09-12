@@ -10,25 +10,36 @@ import (
 // Replaces each output through a temporary file in the destination directory.
 type FileWriter struct{}
 
-// Writes content to path, preserving existing file permissions and following existing symlinks.
-// Failures before the rename leave the existing destination unchanged; dangling symlinks are rejected.
-func (FileWriter) Write(path string, content []byte) error {
-	target, mode, err := inspectDestination(path)
+// Holds a validated absolute destination; its zero value cannot be written.
+type Destination struct{ path string }
+
+// Returns the resolved destination path used for duplicate detection and saving.
+func (d Destination) Path() string { return d.path }
+
+// Resolves and validates a destination without creating files or directories.
+func (FileWriter) Prepare(path string) (Destination, error) {
+	target, _, err := inspectDestination(path)
+	if err != nil {
+		return Destination{}, err
+	}
+	return Destination{path: target}, nil
+}
+
+// Replaces a prepared destination, rejecting changed symlink targets and rechecking permissions and file types.
+// Failures before the rename leave the existing destination unchanged.
+func (FileWriter) Write(destination Destination, content []byte) error {
+	target, mode, err := inspectDestination(destination.path)
 	if err != nil {
 		return err
+	}
+	if target != destination.path {
+		return fmt.Errorf("output destination changed after preparation: %s", destination.path)
 	}
 	dir := filepath.Dir(target)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory '%s': %w", dir, err)
 	}
 	return writeTemporaryFile(target, content, mode)
-}
-
-// Checks existing destination types and symlinks without modifying the filesystem.
-// Permissions, free space, and subsequent filesystem changes are checked by the actual write.
-func (FileWriter) Validate(path string) error {
-	_, _, err := inspectDestination(path)
-	return err
 }
 
 // Resolves the destination and existing permissions, rejecting unusable destination types.

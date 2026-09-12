@@ -27,7 +27,7 @@ func TestResolvePath(t *testing.T) {
 			expected, err := filepath.EvalSymlinks(filepath.Join(dir, "b"))
 			require.NoError(t, err)
 			assert.Equal(t, filepath.Join(expected, "out.yaml"), resolved)
-			require.NoError(t, (FileWriter{}).Write(path, []byte(name)))
+			require.NoError(t, writeForTest(path, []byte(name)))
 			data, err := os.ReadFile(resolved)
 			require.NoError(t, err)
 			assert.Equal(t, name, string(data))

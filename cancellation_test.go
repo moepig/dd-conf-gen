@@ -73,7 +73,7 @@ func TestApplicationCancellationDuringFinalSave(t *testing.T) {
 	p.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
 	path, destination := cancellationConfig(t)
 	writer := new(mockOutputWriter)
-	writer.On("Validate", destination).Return(nil).Once()
+	writer.On("Prepare", destination).Return(nil).Once()
 	writer.On("Write", destination, []byte("instances: []")).Run(func(mock.Arguments) { cancel() }).Return(nil).Once()
 	app.writer = writer
 	require.ErrorIs(t, app.run(ctx, path), context.Canceled)

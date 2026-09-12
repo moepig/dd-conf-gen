@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/moepig/dd-conf-gen/internal/logging"
-	"github.com/moepig/dd-conf-gen/output"
 	"gopkg.in/yaml.v3"
 )
 
@@ -76,7 +75,6 @@ func validateGenConfig(cfg *GenConfig) error {
 	}
 
 	// Validate outputs
-	outputPaths := make(map[string]int)
 	for i, out := range cfg.Outputs {
 		if out.Template == "" {
 			return fmt.Errorf("output[%d]: template is required", i)
@@ -84,14 +82,6 @@ func validateGenConfig(cfg *GenConfig) error {
 		if out.OutputFile == "" {
 			return fmt.Errorf("output[%d]: output_file is required", i)
 		}
-		path, err := output.ResolvePath(out.OutputFile)
-		if err != nil {
-			return fmt.Errorf("output[%d]: invalid output_file: %w", i, err)
-		}
-		if previous, ok := outputPaths[path]; ok {
-			return fmt.Errorf("output[%d]: duplicate output_file with output[%d]: %s", i, previous, out.OutputFile)
-		}
-		outputPaths[path] = i
 		if out.Data.ResourceName == "" {
 			return fmt.Errorf("output[%d]: data.resource_name is required", i)
 		}

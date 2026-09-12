@@ -175,7 +175,7 @@ func TestRunFailures(t *testing.T) {
 				cfg.Outputs[0].OutputFile = dir
 				expectedError = "invalid output file"
 			}
-			if name != "invalid config" && name != "unknown provider" && name != "duplicate output" && name != "output directory error" {
+			if name != "invalid config" && name != "unknown provider" {
 				p.On("Prepare", mock.Anything).Return(nil).Once()
 				if name == "discovery error" || name == "execution error" {
 					p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
