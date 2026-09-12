@@ -1,0 +1,13 @@
+resources:
+  - name: production_mysql_instances
+    type: aurora_mysql
+    region: ap-northeast-1
+    filters:
+      tags:
+        env: prod
+
+outputs:
+  - template: templates/mysql.yaml.tmpl
+    output_file: /etc/datadog-agent/conf.d/mysql.d/conf.yaml
+    data:
+      resource_name: production_mysql_instances

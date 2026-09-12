@@ -15,15 +15,17 @@ import (
 	"github.com/moepig/dd-conf-gen/internal/logging"
 	"github.com/moepig/dd-conf-gen/output"
 	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/providers/aurora"
 	"github.com/moepig/dd-conf-gen/providers/elasticache"
 )
 
 // Build version; release builds may override it through linker flags.
-var version = "0.25.0"
+var version = "0.26.0"
 
 // Initializes the application and exits with the CLI status.
 func main() {
 	registry := providers.NewRegistry(map[string]providers.Factory{
+		"aurora_mysql":      func() providers.Provider { return aurora.NewProvider() },
 		"elasticache_redis": func() providers.Provider { return elasticache.NewProvider() },
 	})
 	app := &application{registry: registry, writer: output.FileWriter{}}

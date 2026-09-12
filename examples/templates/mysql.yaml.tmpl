@@ -1,0 +1,18 @@
+init_config:
+
+instances:
+{{- if not .Resources }} []
+{{- end }}
+{{- range .Resources }}
+  - host: {{ printf "%q" .Host }}
+    port: {{ .Port }}
+    username: "%%env_MYSQL_USERNAME%%"
+    password: "%%env_MYSQL_PASSWORD%%"
+    tags:
+      - {{ printf "cluster:%s" (index .Metadata "ClusterName") | printf "%q" }}
+      - {{ printf "db_instance:%s" (index .Metadata "DBInstanceID") | printf "%q" }}
+      - "role:{{ if index .Metadata "IsWriter" }}writer{{ else }}reader{{ end }}"
+    {{- if index .Tags "env" }}
+      - {{ printf "env:%s" (index .Tags "env") | printf "%q" }}
+    {{- end }}
+{{- end }}

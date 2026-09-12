@@ -103,7 +103,7 @@ outputs:
 
 出力先はシンボリックリンクを解決してから `..` を処理し、絶対パスとして保持する。同じ出力先を複数の出力定義で指定してはいけない。保存には検証済みのパスを使用し、そのパスのシンボリックリンクによる転送先が変化した場合はエラーとする。検証後に元のエイリアスだけを変更しても、保存先は変わらない。保存処理と同時に行われる外部からのファイルシステム変更に対する排他制御は行わない。
 
-ElastiCache のフィルターは `filters.tags` のみを受け付ける。タグ値は文字列で指定すること。数値や真偽値として解釈される YAML の値は引用符で囲む必要がある。未対応のフィルター名や文字列以外のタグ値はエラーとする。
+ElastiCache と Aurora MySQL のフィルターは `filters.tags` のみを受け付ける。タグ値は文字列で指定すること。数値や真偽値として解釈される YAML の値は引用符で囲む必要がある。未対応のフィルター名や文字列以外のタグ値はエラーとする。
 
 ### 出力ファイルの更新
 
@@ -138,6 +138,9 @@ Datadog チェック設定テンプレートは Go の `text/template` 形式で
 | リソース種別        | 説明                      | ドキュメント                                                       |
 | ------------------- | ------------------------- | ------------------------------------------------------------------ |
 | `elasticache_redis` | AWS ElastiCache for Redis | [providers/elasticache/README.md](providers/elasticache/README.md) |
+| `aurora_mysql` | AWS Aurora MySQL | [providers/aurora/README.md](providers/aurora/README.md) |
+
+Aurora MySQL はクラスターのタグで検索し、各 DB インスタンスのエンドポイントを取得する。実行可能な生成設定例は、[examples/gen-config-aurora-mysql.yaml](examples/gen-config-aurora-mysql.yaml) を参照。
 
 ## 開発
 
