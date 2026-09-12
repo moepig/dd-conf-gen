@@ -67,7 +67,7 @@ func TestFileWriterInvalidDestination(t *testing.T) {
 	require.Error(t, w.Write(dir, []byte("new")))
 	parent := filepath.Join(dir, "parent")
 	require.NoError(t, os.WriteFile(parent, []byte("keep"), 0600))
-	require.ErrorContains(t, w.Write(filepath.Join(parent, "child"), nil), "failed to")
+	require.ErrorContains(t, w.Write(filepath.Join(parent, "child"), nil), "not a directory")
 	content, err := os.ReadFile(parent)
 	require.NoError(t, err)
 	assert.Equal(t, "keep", string(content))

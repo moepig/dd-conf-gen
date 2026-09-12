@@ -346,3 +346,19 @@ outputs:
 		assert.NotNil(t, cfg.Resources[0].Filters)
 	})
 }
+
+// Uses a symlink followed by a parent component to ensure equivalent output destinations are rejected.
+func TestDuplicateOutputAfterSymlinkParent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "b", "child"), 0700))
+	require.NoError(t, os.Symlink("b/child", filepath.Join(dir, "link")))
+	cfg := &GenConfig{
+		Resources: []ResourceConfig{{Name: "redis", Type: "elasticache_redis", Region: "us-east-1"}},
+		Outputs: []OutputConfig{
+			{Template: "redis.tmpl", OutputFile: dir + "/link/../out.yaml", Data: OutputData{ResourceName: "redis"}},
+			{Template: "redis.tmpl", OutputFile: filepath.Join(dir, "b", "out.yaml"), Data: OutputData{ResourceName: "redis"}},
+		},
+	}
+	require.ErrorContains(t, validateGenConfig(cfg), "duplicate output_file")
+}

@@ -33,15 +33,9 @@ func (FileWriter) Validate(path string) error {
 
 // Resolves the destination and existing permissions, rejecting unusable destination types.
 func inspectDestination(path string) (string, *os.FileMode, error) {
-	target := path
-	info, err := os.Lstat(path)
-	if err == nil && info.Mode()&os.ModeSymlink != 0 {
-		target, err = filepath.EvalSymlinks(path)
-		if err != nil {
-			return "", nil, fmt.Errorf("failed to resolve output symlink: %w", err)
-		}
-	} else if err != nil && !os.IsNotExist(err) {
-		return "", nil, fmt.Errorf("failed to inspect output file: %w", err)
+	target, err := ResolvePath(path)
+	if err != nil {
+		return "", nil, err
 	}
 	var mode *os.FileMode
 	if info, err := os.Stat(target); err == nil {
