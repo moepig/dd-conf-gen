@@ -19,6 +19,7 @@ type OutputConfig struct {
 	Template   string     `yaml:"template"`
 	OutputFile string     `yaml:"output_file"`
 	Data       OutputData `yaml:"data"`
+	OnEmpty    string     `yaml:"on_empty,omitempty"`
 }
 
 // Identifies one or more resource definitions selected for an output.

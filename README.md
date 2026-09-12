@@ -72,6 +72,7 @@ dd-conf-gen -config gen-config.yaml -timeout 30s
 | -------------------- | ------ | ---- | ---------------------------------------------------- |
 | `template`           | string | ○    | テンプレートファイルのパス（相対パスまたは絶対パス） |
 | `output_file`        | string | ○    | 出力先ファイルのパス                                 |
+| `on_empty` | string | | 検索結果が 0 件の場合の動作。既定値は `render` |
 | `data.resource_name` | string | 条件付き | 使用するリソース定義の名前 |
 | `data.resource_names` | array | 条件付き | 集約するリソース定義の名前のリスト |
 
@@ -127,6 +128,29 @@ ElastiCache と Aurora MySQL のフィルターは `filters.tags` のみを受�
 新規ファイルのアクセス権は `0644` にプロセスの `umask` を適用する。既存ファイルのパーミッションビットは保持する。所有者・ACL・拡張属性の保持は保証しない。
 
 保存中にエラーが発生した場合、その時点で処理を終了する。先に保存が完了したファイルは更新済みとなるため、複数ファイル全体の更新は不可分ではない。
+
+### 検索結果が 0 件の場合
+
+`outputs[].on_empty` は、出力に使用する検索結果の集約後、テンプレートでの絞り込み前の件数に適用する。動作を、以下に示す。
+
+| 値 | 動作 |
+| --- | --- |
+| `render` | 空の `.Resources` を渡して生成し、保存する。既定の動作である |
+| `error` | エラーで終了し、すべての出力ファイルを更新しない |
+| `keep` | その出力の生成と保存を省略する。既存ファイルを保持し、新規ファイルは作成しない |
+
+`keep` の場合も、テンプレートと出力先の事前検証を行う。AWS API のエラーは 0 件と扱わず、通常どおり処理全体を失敗とする。テンプレート内の条件で全件を除外した場合は `on_empty` の対象にならない。
+
+必須の監視対象が見つからない場合に更新を中止する設定を、以下に示す。
+
+```yaml
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /etc/datadog-agent/conf.d/redisdb.d/conf.yaml
+    on_empty: error
+    data:
+      resource_name: production_redis_nodes
+```
 
 ### テンプレートの基本
 

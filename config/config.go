@@ -80,6 +80,11 @@ func validateGenConfig(cfg *GenConfig) error {
 	}
 
 	for i, out := range cfg.Outputs {
+		switch out.OnEmpty {
+		case "", "render", "error", "keep":
+		default:
+			return fmt.Errorf("output[%d]: on_empty must be render, error, or keep", i)
+		}
 		if out.Template == "" {
 			return fmt.Errorf("output[%d]: template is required", i)
 		}

@@ -182,3 +182,61 @@ func TestApplicationAggregatesResources(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "a:1/;a:2/;z:2/first;", string(data))
 }
+
+// Uses empty mocked searches with existing and absent files to verify every empty-result policy and that a later error prevents earlier saves.
+func TestApplicationEmptyResults(t *testing.T) {
+	t.Parallel()
+	for _, policy := range []string{"", "render", "keep", "error", "invalid"} {
+		t.Run(policy, func(t *testing.T) {
+			t.Parallel()
+			for _, existing := range []bool{false, true} {
+				app, p := newTestApplication(t)
+				dir := t.TempDir()
+				first, dest := filepath.Join(dir, "first.yaml"), filepath.Join(dir, "out.yaml")
+				require.NoError(t, os.WriteFile(first, []byte("original"), 0600))
+				if existing {
+					require.NoError(t, os.WriteFile(dest, []byte("original"), 0600))
+				}
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tmpl"), []byte("instances: []\n"), 0600))
+				if policy != "invalid" {
+					p.On("Prepare", mock.Anything).Return(nil).Once()
+					p.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
+				}
+				path := writeRunConfig(t, dir, config.GenConfig{
+					Resources: []config.ResourceConfig{{Name: "r", Type: p.Type(), Region: "east"}},
+					Outputs: []config.OutputConfig{
+						{Template: "test.tmpl", OutputFile: first, Data: config.OutputData{ResourceName: "r"}},
+						{Template: "test.tmpl", OutputFile: dest, OnEmpty: policy, Data: config.OutputData{ResourceName: "r"}},
+					},
+				})
+				err := app.run(context.Background(), path)
+				failed := policy == "error" || policy == "invalid"
+				if failed {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+				firstData, err := os.ReadFile(first)
+				require.NoError(t, err)
+				if failed {
+					assert.Equal(t, "original", string(firstData))
+				} else {
+					assert.Equal(t, "instances: []\n", string(firstData))
+				}
+				if policy == "keep" || failed {
+					if existing {
+						data, err := os.ReadFile(dest)
+						require.NoError(t, err)
+						assert.Equal(t, "original", string(data))
+					} else {
+						assert.NoFileExists(t, dest)
+					}
+				} else {
+					data, err := os.ReadFile(dest)
+					require.NoError(t, err)
+					assert.Equal(t, "instances: []\n", string(data))
+				}
+			}
+		})
+	}
+}

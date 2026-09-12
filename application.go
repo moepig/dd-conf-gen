@@ -112,6 +112,15 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		logging.FromContext(ctx).Info("Rendering template", "output_file", path)
 
 		discoveredResources := selectResources(resourceMap, prepared.resourceNames)
+		if len(discoveredResources) == 0 {
+			switch prepared.onEmpty {
+			case "error":
+				return nil, fmt.Errorf("no resources found for output '%s'", path)
+			case "keep":
+				logging.FromContext(ctx).Warn("Keeping output because no resources were found", "output_file", path)
+				continue
+			}
+		}
 
 		templateData := renderer.TemplateData{
 			Resources: discoveredResources,
@@ -163,6 +172,7 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 // Holds a resource reference, validated destination, and compiled template.
 type preparedOutput struct {
 	resourceNames []string
+	onEmpty       string
 	destination   output.Destination
 	template      *renderer.CompiledTemplate
 }
@@ -184,7 +194,7 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", out.OutputFile, err)
 		}
-		prepared = append(prepared, preparedOutput{resourceNames: out.Data.Names(), template: template})
+		prepared = append(prepared, preparedOutput{resourceNames: out.Data.Names(), onEmpty: out.OnEmpty, template: template})
 	}
 	paths := make(map[string]int, len(outputs))
 	for i, out := range outputs {
