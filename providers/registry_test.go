@@ -35,8 +35,10 @@ func TestRegistry(t *testing.T) {
 	assert.Nil(t, p)
 	first := &registryMockProvider{kind: "first"}
 	second := &registryMockProvider{kind: "second"}
-	r.Register(first.Type(), func() Provider { return first })
-	r.Register(second.Type(), func() Provider { return second })
+	r = NewRegistry(map[string]Factory{
+		first.Type():  func() Provider { return first },
+		second.Type(): func() Provider { return second },
+	})
 	for _, expected := range []*registryMockProvider{first, second} {
 		actual, err := r.Get(expected.Type())
 		require.NoError(t, err)
@@ -45,8 +47,10 @@ func TestRegistry(t *testing.T) {
 	assert.ElementsMatch(t, []string{"first", "second"}, r.List())
 	_, err = r.Get("missing")
 	require.ErrorContains(t, err, "available types: first, second")
-	other := &Registry{}
-	other.Register("first", func() Provider { return &registryMockProvider{kind: "first"} })
+	other := NewRegistry(map[string]Factory{"first": func() Provider { return &registryMockProvider{kind: "first"} }})
+	otherProvider, err := other.Get("first")
+	require.NoError(t, err)
+	assert.NotSame(t, first, otherProvider)
 	actual, err := r.Get("first")
 	require.NoError(t, err)
 	assert.Same(t, first, actual)
@@ -55,41 +59,65 @@ func TestRegistry(t *testing.T) {
 // Each lookup must construct an independent provider; factories may inspect the registry without deadlocking.
 func TestRegistryFactories(t *testing.T) {
 	t.Parallel()
-	r := &Registry{}
-	r.Register("test", func() Provider {
+	var r *Registry
+	r = NewRegistry(map[string]Factory{"test": func() Provider {
 		assert.Contains(t, r.List(), "test")
 		return &registryMockProvider{kind: "test"}
-	})
+	}})
 	first, err := r.Get("test")
 	require.NoError(t, err)
 	second, err := r.Get("test")
 	require.NoError(t, err)
 	assert.NotSame(t, first, second)
 	for _, factory := range []Factory{nil, func() Provider { return nil }, func() Provider { return (*registryMockProvider)(nil) }, func() Provider { return &registryMockProvider{kind: "wrong"} }} {
-		r.Register("invalid", factory)
-		_, err := r.Get("invalid")
+		invalid := NewRegistry(map[string]Factory{"invalid": factory})
+		_, err := invalid.Get("invalid")
 		require.Error(t, err)
 	}
 }
 
-// Concurrent registration, lookup, and listing must preserve every provider without data races.
+// Looks up and lists an immutable set of factories concurrently and requires independent provider results.
 func TestRegistryConcurrentAccess(t *testing.T) {
 	t.Parallel()
-	r := &Registry{}
 	const count = 32
+	factories := make(map[string]Factory, count)
+	for i := range count {
+		kind := fmt.Sprintf("provider-%d", i)
+		factories[kind] = func() Provider { return &registryMockProvider{kind: kind} }
+	}
+	r := NewRegistry(factories)
 	var wg sync.WaitGroup
 	for i := range count {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p := &registryMockProvider{kind: fmt.Sprintf("provider-%d", i)}
-			r.Register(p.Type(), func() Provider { return p })
-			actual, err := r.Get(p.Type())
-			assert.NoError(t, err)
-			assert.Same(t, p, actual)
-			assert.Contains(t, r.List(), p.Type())
+			kind := fmt.Sprintf("provider-%d", i)
+			actual, err := r.Get(kind)
+			if assert.NoError(t, err) {
+				assert.Equal(t, kind, actual.Type())
+			}
+			assert.Contains(t, r.List(), kind)
 		}()
 	}
 	wg.Wait()
 	assert.Len(t, r.List(), count)
+}
+
+// Mutates constructor input and a returned list and requires the registry to retain its original registrations.
+func TestRegistryOwnsRegistrations(t *testing.T) {
+	t.Parallel()
+	p := &registryMockProvider{kind: "test"}
+	factories := map[string]Factory{"test": func() Provider { return p }}
+	r := NewRegistry(factories)
+	delete(factories, "test")
+	factories["other"] = nil
+	list := r.List()
+	require.Equal(t, []string{"test"}, list)
+	list[0] = "changed"
+	assert.Equal(t, []string{"test"}, r.List())
+	actual, err := r.Get("test")
+	require.NoError(t, err)
+	assert.Same(t, p, actual)
+	_, err = r.Get("other")
+	require.Error(t, err)
 }

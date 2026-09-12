@@ -44,8 +44,7 @@ func newTestApplication(t *testing.T) (*application, *mockProvider) {
 	t.Helper()
 	p := new(mockProvider)
 	p.Test(t)
-	registry := &providers.Registry{}
-	registry.Register(p.Type(), func() providers.Provider { return p })
+	registry := providers.NewRegistry(map[string]providers.Factory{p.Type(): func() providers.Provider { return p }})
 	t.Cleanup(func() {
 		p.AssertExpectations(t)
 	})

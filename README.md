@@ -160,10 +160,10 @@ go test ./... -short -cover
 
 1. `providers/<provider_name>/` ディレクトリを作成
 2. `providers.Provider` インターフェースを実装
-3. `main.go` の `providers.Registry` にリソース種別とプロバイダーの生成関数を登録
+3. `main.go` の `providers.NewRegistry` に渡すマップへリソース種別とプロバイダーの生成関数を追加
 4. ドキュメント（README.md）を作成
 
-プロバイダーの登録内容は `Registry` のインスタンスごとに独立する。生成関数はリソース定義ごとに呼び出され、プロバイダーを生成する。テストでは専用のインスタンスにモックを返す生成関数を登録してアプリケーションへ渡す。ElastiCache の API モックは `NewProviderWithClients` で注入できる。
+プロバイダーの登録内容は `Registry` の構築時にコピーし、構築後は変更しない。生成関数はリソース定義ごとに呼び出され、プロバイダーを生成する。並行した検索に使用する場合、生成関数自体も並行呼び出しに対応すること。テストではモックを返す生成関数で専用のインスタンスを構築してアプリケーションへ渡す。ElastiCache の API モックは `NewProviderWithClients` で注入できる。
 
 `Prepare` は外部アクセスや入力設定の変更を行わず、プロバイダー内部の型付き設定に変換する。変換した設定の独立したコピーを保持する `providers.Discovery` 関数を返すこと。不正な設定はエラーとし、成功時に `nil` の関数を返してはいけない。検索処理はこの関数に `context.Context` を渡して実行する。
 

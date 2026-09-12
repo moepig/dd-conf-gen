@@ -18,11 +18,12 @@ import (
 	"github.com/moepig/dd-conf-gen/providers/elasticache"
 )
 
-var version = "0.24.0"
+var version = "0.25.0"
 
 func main() {
-	registry := &providers.Registry{}
-	registry.Register("elasticache_redis", func() providers.Provider { return elasticache.NewProvider() })
+	registry := providers.NewRegistry(map[string]providers.Factory{
+		"elasticache_redis": func() providers.Provider { return elasticache.NewProvider() },
+	})
 	app := &application{registry: registry, writer: output.FileWriter{}}
 	os.Exit(app.runWithSignals(os.Args[1:], os.Stdout, os.Stderr))
 }

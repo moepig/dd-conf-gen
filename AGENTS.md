@@ -133,9 +133,11 @@ instances:
    - `Prepare(config) (providers.Discovery, error)`: 外部アクセスなしで設定を検証し、型付き設定の独立したコピーを保持する検索関数を返す
    - `providers.Discovery`: `context.Context` を受け取り、リソースのスライスとエラーを返す関数
 3. `provider_test.go` を作成し、モックを使用したユニットテストを実装
-4. `main.go` の `providers.Registry` に、リソース種別とプロバイダーの生成関数を登録
+4. `main.go` の `providers.NewRegistry` に渡すマップへ、リソース種別とプロバイダーの生成関数を追加。構築後の登録変更は行わない
    ```go
-   registry.Register("rds_mysql", func() providers.Provider { return rds.NewProvider() })
+   registry := providers.NewRegistry(map[string]providers.Factory{
+       "rds_mysql": func() providers.Provider { return rds.NewProvider() },
+   })
    ```
 5. ドキュメント（README.md）にリソース種別の説明を追加
 
