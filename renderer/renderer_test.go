@@ -4,11 +4,38 @@ import (
 	"context"
 	"os"
 	"testing"
+	"text/template"
+	"time"
 
 	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Cancels before and during template execution and requires the context error with no partial output.
+func TestTemplateCancellation(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{"prefix{{cancel}}suffix", "{{$_ := cancel}}"} {
+		t.Run(source, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			tmpl := template.Must(template.New("test").Funcs(template.FuncMap{"cancel": func() string { cancel(); return "" }}).Parse(source))
+			compiled := &CompiledTemplate{template: tmpl}
+			data, err := compiled.RenderContext(ctx, TemplateData{})
+			require.ErrorIs(t, err, context.Canceled)
+			assert.Nil(t, data)
+		})
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	compiled := &CompiledTemplate{template: template.Must(template.New("test").Parse("output"))}
+	data, err := compiled.RenderContext(ctx, TemplateData{})
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Nil(t, data)
+	result, err := NewRenderer().CompileContext(ctx, "missing-template")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Nil(t, result)
+}
 
 func TestRenderer_Render(t *testing.T) {
 	t.Run("simple template", func(t *testing.T) {

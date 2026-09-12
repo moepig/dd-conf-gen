@@ -45,6 +45,9 @@ func (app *application) run(ctx context.Context, configPath string) error {
 		}
 		logging.FromContext(ctx).Info("Written output file", "path", output.path)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	logging.FromContext(ctx).Info("Done!")
 	return nil
 }

@@ -63,6 +63,23 @@ func TestApplicationCancellationBeforeSave(t *testing.T) {
 	assert.NoFileExists(t, output)
 }
 
+// Cancels inside the final mocked save and requires cancellation rather than reporting overall success.
+func TestApplicationCancellationDuringFinalSave(t *testing.T) {
+	t.Parallel()
+	app, p := newTestApplication(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
+	path, destination := cancellationConfig(t)
+	writer := new(mockOutputWriter)
+	writer.On("Validate", destination).Return(nil).Once()
+	writer.On("Write", destination, []byte("instances: []")).Run(func(mock.Arguments) { cancel() }).Return(nil).Once()
+	app.writer = writer
+	require.ErrorIs(t, app.run(ctx, path), context.Canceled)
+	writer.AssertExpectations(t)
+}
+
 // Delivers actual signals to a child process with mocked discovery and verifies cancellation without output writes.
 func TestCLISignals(t *testing.T) {
 	executable, err := os.Executable()
