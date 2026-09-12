@@ -364,7 +364,7 @@ func TestProvider_DiscoverOnlyUntaggedResources(t *testing.T) {
 
 // Missing ARNs and nil API responses must return errors instead of panicking.
 func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
-	for _, name := range []string{"nil tagging response", "missing ARN", "empty ARN", "nil describe response"} {
+	for _, name := range []string{"nil tagging response", "missing ARN", "empty ARN", "missing group ID", "nil describe response"} {
 		t.Run(name, func(t *testing.T) {
 			tagging := new(MockResourceGroupsTaggingClient)
 			client := new(MockElastiCacheClient)
@@ -376,6 +376,9 @@ func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
 				expectedError = "resource mapping has no ARN"
 				if name == "empty ARN" {
 					mapping.ResourceARN = aws.String("")
+				} else if name == "missing group ID" {
+					mapping.ResourceARN = aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:")
+					expectedError = "resource mapping ARN has no replication group ID"
 				} else if name == "nil describe response" {
 					mapping.ResourceARN = aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:cluster")
 					expectedError = "empty response describing replication groups"
@@ -817,22 +820,33 @@ func TestBuildTagFilters(t *testing.T) {
 	})
 }
 
-func TestExtractReplicationGroupIDsFromARNs(t *testing.T) {
-	t.Run("extract IDs from ARNs", func(t *testing.T) {
-		arns := []string{
-			"arn:aws:elasticache:ap-northeast-1:123456789012:replicationgroup:cluster-1",
-			"arn:aws:elasticache:us-east-1:999999999999:replicationgroup:cluster-2",
-		}
-
-		ids := extractReplicationGroupIDsFromARNs(arns)
-		require.Len(t, ids, 2)
-		assert.Equal(t, "cluster-1", ids[0])
-		assert.Equal(t, "cluster-2", ids[1])
-	})
-
-	t.Run("empty ARNs", func(t *testing.T) {
-		arns := []string{}
-		ids := extractReplicationGroupIDsFromARNs(arns)
-		assert.Len(t, ids, 0)
-	})
+// Returns two filtered groups with distinct tags and verifies IDs and tags stay associated without intermediate lookup maps.
+func TestFilteredDiscoveryKeepsMappingTags(t *testing.T) {
+	t.Parallel()
+	client := new(MockElastiCacheClient)
+	tagging := new(MockResourceGroupsTaggingClient)
+	var mappings []taggingtypes.ResourceTagMapping
+	for _, id := range []string{"cluster-2", "cluster-1"} {
+		mappings = append(mappings, taggingtypes.ResourceTagMapping{
+			ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:" + id),
+			Tags:        []taggingtypes.Tag{{Key: aws.String("cluster"), Value: aws.String(id)}, {Key: aws.String("incomplete")}},
+		})
+		client.On("DescribeReplicationGroups", mock.Anything, &elasticache.DescribeReplicationGroupsInput{ReplicationGroupId: aws.String(id)}, mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
+			ReplicationGroups: []elasticachetypes.ReplicationGroup{{ReplicationGroupId: aws.String(id), NodeGroups: []elasticachetypes.NodeGroup{{NodeGroupMembers: []elasticachetypes.NodeGroupMember{
+				{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String(id), Port: aws.Int32(6379)}},
+			}}}}},
+		}, nil).Once()
+	}
+	tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{ResourceTagMappingList: mappings}, nil).Once()
+	result, err := discoverForTest(NewProviderWithClients(client, tagging), context.Background(), providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}}})
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+	assert.Equal(t, "cluster-2", result[0].Host)
+	assert.Equal(t, "cluster-1", result[1].Host)
+	for _, node := range result {
+		assert.Equal(t, map[string]string{"cluster": node.Host}, node.Tags)
+		assert.Equal(t, node.Host, node.Metadata["ClusterName"])
+	}
+	client.AssertExpectations(t)
+	tagging.AssertExpectations(t)
 }

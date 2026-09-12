@@ -79,9 +79,8 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 
 	logging.FromContext(ctx).Info("Found replication groups by tags", "count", len(resourceTagMappings))
 
-	// Build ARN to tags map
-	arnToTags := buildARNToTagsMap(resourceTagMappings)
 	if len(tags) == 0 {
+		arnToTags := buildARNToTagsMap(resourceTagMappings)
 		groups, err := p.describeReplicationGroups(ctx, &elasticache.DescribeReplicationGroupsInput{})
 		if err != nil {
 			return nil, err
@@ -95,26 +94,16 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 		return result, nil
 	}
 
-	// Extract replication group IDs
-	var replicationGroupARNs []string
+	var result []providers.Resource
 	for _, mapping := range resourceTagMappings {
-		if aws.ToString(mapping.ResourceARN) == "" {
+		arn := aws.ToString(mapping.ResourceARN)
+		if arn == "" {
 			return nil, fmt.Errorf("resource mapping has no ARN")
 		}
-		replicationGroupARNs = append(replicationGroupARNs, *mapping.ResourceARN)
-	}
-	replicationGroupIDs := extractReplicationGroupIDsFromARNs(replicationGroupARNs)
-	logging.FromContext(ctx).Debug("Extracted replication group IDs", "ids", replicationGroupIDs)
-
-	// Build ID to ARN map
-	idToARN := make(map[string]string)
-	for i, arn := range replicationGroupARNs {
-		idToARN[replicationGroupIDs[i]] = arn
-	}
-
-	// Describe replication groups and extract nodes
-	var result []providers.Resource
-	for _, id := range replicationGroupIDs {
+		id := arn[strings.LastIndexByte(arn, ':')+1:]
+		if id == "" {
+			return nil, fmt.Errorf("resource mapping ARN has no replication group ID")
+		}
 		logging.FromContext(ctx).Debug("Describing replication group", "replication_group_id", id)
 
 		descInput := &elasticache.DescribeReplicationGroupsInput{
@@ -135,12 +124,8 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 			"replication_group_id", id,
 			"node_groups_count", len(groups[0].NodeGroups))
 
-		// Get tags for this ARN (pass all tags as-is)
-		arn := idToARN[id]
-		clusterTags := arnToTags[arn]
-
 		// Extract nodes from replication groups
-		nodes := extractNodesFromReplicationGroups(ctx, groups, id, clusterTags)
+		nodes := extractNodesFromReplicationGroups(ctx, groups, id, tagsFromMapping(mapping))
 		logging.FromContext(ctx).Debug("Extracted nodes from replication group",
 			"replication_group_id", id,
 			"nodes_count", len(nodes))
@@ -264,26 +249,20 @@ func buildARNToTagsMap(resourceTagMappings []taggingtypes.ResourceTagMapping) ma
 		if aws.ToString(mapping.ResourceARN) == "" {
 			continue
 		}
-		arn := *mapping.ResourceARN
-		tagsMap := make(map[string]string)
-		for _, tag := range mapping.Tags {
-			if tag.Key != nil && tag.Value != nil {
-				tagsMap[*tag.Key] = *tag.Value
-			}
-		}
-		arnToTags[arn] = tagsMap
+		arnToTags[*mapping.ResourceARN] = tagsFromMapping(mapping)
 	}
 	return arnToTags
 }
 
-// extractReplicationGroupIDsFromARNs extracts replication group IDs from ARNs
-func extractReplicationGroupIDsFromARNs(arns []string) []string {
-	replicationGroupIDs := []string{}
-	for _, arn := range arns {
-		parts := strings.Split(arn, ":")
-		replicationGroupIDs = append(replicationGroupIDs, parts[len(parts)-1])
+// Copies complete tag pairs from a resource mapping into an independently owned map.
+func tagsFromMapping(mapping taggingtypes.ResourceTagMapping) map[string]string {
+	tags := make(map[string]string, len(mapping.Tags))
+	for _, tag := range mapping.Tags {
+		if tag.Key != nil && tag.Value != nil {
+			tags[*tag.Key] = *tag.Value
+		}
 	}
-	return replicationGroupIDs
+	return tags
 }
 
 // extractNodesFromReplicationGroups extracts all nodes from replication groups
@@ -304,10 +283,7 @@ func extractNodesFromReplicationGroups(ctx context.Context, replicationGroups []
 			for _, member := range ng.NodeGroupMembers {
 				// Get all node endpoints (both primary and replica)
 				if member.ReadEndpoint != nil && aws.ToString(member.ReadEndpoint.Address) != "" && aws.ToInt32(member.ReadEndpoint.Port) > 0 {
-					isPrimary := false
-					if member.CurrentRole != nil && *member.CurrentRole == "primary" {
-						isPrimary = true
-					}
+					isPrimary := aws.ToString(member.CurrentRole) == "primary"
 
 					resource := providers.Resource{
 						Host: *member.ReadEndpoint.Address,
