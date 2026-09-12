@@ -48,6 +48,8 @@ func TestRegistry(t *testing.T) {
 		assert.Same(t, expected, actual)
 	}
 	assert.ElementsMatch(t, []string{"first", "second"}, r.List())
+	_, err = r.Get("missing")
+	require.ErrorContains(t, err, "available types: first, second")
 	other := &Registry{}
 	other.Register(&registryMockProvider{kind: "first"})
 	actual, err := r.Get("first")

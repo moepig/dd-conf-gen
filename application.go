@@ -80,7 +80,7 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 
 	// Render templates and write output files
 	logging.FromContext(ctx).Info("Generating output files")
-	rend := renderer.NewRenderer("")
+	rend := renderer.NewRenderer()
 
 	var outputs []generatedOutput
 	for _, outCfg := range genCfg.Outputs {

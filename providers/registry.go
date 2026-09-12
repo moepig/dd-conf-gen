@@ -2,6 +2,8 @@ package providers
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -24,15 +26,15 @@ func (r *Registry) Register(provider Provider) {
 // Returns the provider for resourceType, or an error if it is unregistered.
 func (r *Registry) Get(resourceType string) (Provider, error) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
 	provider, ok := r.providers[resourceType]
+	r.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("provider not found for resource type: %s", resourceType)
+		return nil, fmt.Errorf("provider not found for resource type: %s (available types: %s)", resourceType, strings.Join(r.List(), ", "))
 	}
 	return provider, nil
 }
 
-// Returns the registered resource types in unspecified order.
+// Returns the registered resource types in lexical order.
 func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -40,5 +42,6 @@ func (r *Registry) List() []string {
 	for t := range r.providers {
 		types = append(types, t)
 	}
+	sort.Strings(types)
 	return types
 }

@@ -109,11 +109,6 @@ func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) (
 		idToARN[replicationGroupIDs[i]] = arn
 	}
 
-	// Ensure elasticache client is initialized
-	if p.elasticacheClient == nil {
-		return nil, fmt.Errorf("elasticache client is not initialized")
-	}
-
 	// Describe replication groups and extract nodes
 	var result []providers.Resource
 	for _, id := range replicationGroupIDs {
@@ -283,9 +278,7 @@ func extractReplicationGroupIDsFromARNs(arns []string) []string {
 	replicationGroupIDs := []string{}
 	for _, arn := range arns {
 		parts := strings.Split(arn, ":")
-		if len(parts) > 0 {
-			replicationGroupIDs = append(replicationGroupIDs, parts[len(parts)-1])
-		}
+		replicationGroupIDs = append(replicationGroupIDs, parts[len(parts)-1])
 	}
 	return replicationGroupIDs
 }

@@ -22,7 +22,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -58,7 +58,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -96,7 +96,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -137,7 +137,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -170,7 +170,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{Host: "redis1.example.com", Port: 6379},
@@ -200,7 +200,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -227,7 +227,7 @@ instances:
 	})
 
 	t.Run("file not found", func(t *testing.T) {
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{}
 
 		_, err := renderer.Render("/nonexistent/template.yaml", data)
@@ -240,7 +240,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{}
 
 		_, err := renderer.Render(tmpfile, data)
@@ -253,7 +253,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{}
 
 		_, err := renderer.Render(tmpfile, data)
@@ -272,7 +272,7 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer("")
+		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{},
 		}
@@ -294,7 +294,7 @@ func TestRendererMissingMapKey(t *testing.T) {
 		t.Run(field, func(t *testing.T) {
 			path := createTempFile(t, "prefix{{range .Resources}}{{."+field+"}}{{end}}")
 			t.Cleanup(func() { os.Remove(path) })
-			result, err := NewRenderer("").Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}, Metadata: map[string]interface{}{"ClusterName": "redis"}}}})
+			result, err := NewRenderer().Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}, Metadata: map[string]interface{}{"ClusterName": "redis"}}}})
 			require.ErrorContains(t, err, "map has no entry for key")
 			assert.Nil(t, result)
 		})
@@ -305,7 +305,7 @@ func TestRendererMissingMapKey(t *testing.T) {
 func TestRendererOptionalTag(t *testing.T) {
 	path := createTempFile(t, `{{range .Resources}}{{if index .Tags "optional"}}present{{else}}absent{{end}}{{end}}`)
 	t.Cleanup(func() { os.Remove(path) })
-	result, err := NewRenderer("").Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}}}})
+	result, err := NewRenderer().Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}}}})
 	require.NoError(t, err)
 	assert.Equal(t, "absent", string(result))
 }

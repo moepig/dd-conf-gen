@@ -16,16 +16,12 @@ type TemplateData struct {
 	Resources []providers.Resource
 }
 
-// Renderer handles template rendering
-type Renderer struct {
-	templateDir string
-}
+// Renders templates from the file paths supplied by callers.
+type Renderer struct{}
 
-// NewRenderer creates a new Renderer
-func NewRenderer(templateDir string) *Renderer {
-	return &Renderer{
-		templateDir: templateDir,
-	}
+// Creates a stateless template renderer.
+func NewRenderer() *Renderer {
+	return &Renderer{}
 }
 
 // Render renders a template with the given data
