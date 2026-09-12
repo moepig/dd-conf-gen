@@ -18,7 +18,7 @@ import (
 	"github.com/moepig/dd-conf-gen/providers/elasticache"
 )
 
-var version = "0.14.0"
+var version = "0.15.0"
 
 func main() {
 	registry := &providers.Registry{}

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,33 +32,38 @@ func (FileWriter) Validate(path string) error {
 }
 
 // Resolves the destination and existing permissions, rejecting unusable destination types.
-func inspectDestination(path string) (string, os.FileMode, error) {
+func inspectDestination(path string) (string, *os.FileMode, error) {
 	target := path
 	info, err := os.Lstat(path)
 	if err == nil && info.Mode()&os.ModeSymlink != 0 {
 		target, err = filepath.EvalSymlinks(path)
 		if err != nil {
-			return "", 0, fmt.Errorf("failed to resolve output symlink: %w", err)
+			return "", nil, fmt.Errorf("failed to resolve output symlink: %w", err)
 		}
 	} else if err != nil && !os.IsNotExist(err) {
-		return "", 0, fmt.Errorf("failed to inspect output file: %w", err)
+		return "", nil, fmt.Errorf("failed to inspect output file: %w", err)
 	}
-	mode := os.FileMode(0644)
+	var mode *os.FileMode
 	if info, err := os.Stat(target); err == nil {
 		if !info.Mode().IsRegular() {
-			return "", 0, fmt.Errorf("output destination is not a regular file: %s", path)
+			return "", nil, fmt.Errorf("output destination is not a regular file: %s", path)
 		}
-		mode = info.Mode().Perm()
+		permissions := info.Mode().Perm()
+		mode = &permissions
 	} else if !os.IsNotExist(err) {
-		return "", 0, fmt.Errorf("failed to inspect output file: %w", err)
+		return "", nil, fmt.Errorf("failed to inspect output file: %w", err)
 	}
 	return target, mode, nil
 }
 
 // Writes and replaces a destination using a temporary file in the same directory.
-func writeTemporaryFile(target string, content []byte, mode os.FileMode) error {
+func writeTemporaryFile(target string, content []byte, mode *os.FileMode) error {
 	dir := filepath.Dir(target)
-	temp, err := os.CreateTemp(dir, ".dd-conf-gen-*")
+	createMode := os.FileMode(0644)
+	if mode != nil {
+		createMode = 0600
+	}
+	temp, err := os.OpenFile(filepath.Join(dir, ".dd-conf-gen-"+rand.Text()), os.O_RDWR|os.O_CREATE|os.O_EXCL, createMode)
 	if err != nil {
 		return fmt.Errorf("failed to create temporary output file: %w", err)
 	}
@@ -66,8 +72,10 @@ func writeTemporaryFile(target string, content []byte, mode os.FileMode) error {
 	if _, err := temp.Write(content); err != nil {
 		return fmt.Errorf("failed to write temporary output file: %w", err)
 	}
-	if err := temp.Chmod(mode); err != nil {
-		return fmt.Errorf("failed to set output permissions: %w", err)
+	if mode != nil {
+		if err := temp.Chmod(*mode); err != nil {
+			return fmt.Errorf("failed to set output permissions: %w", err)
+		}
 	}
 	if err := temp.Sync(); err != nil {
 		return fmt.Errorf("failed to sync temporary output file: %w", err)
