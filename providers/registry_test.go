@@ -70,7 +70,7 @@ func TestRegistryFactories(t *testing.T) {
 	second, err := r.Get("test")
 	require.NoError(t, err)
 	assert.NotSame(t, first, second)
-	for _, factory := range []Factory{nil, func() Provider { return nil }, func() Provider { return &registryMockProvider{kind: "wrong"} }} {
+	for _, factory := range []Factory{nil, func() Provider { return nil }, func() Provider { return (*registryMockProvider)(nil) }, func() Provider { return &registryMockProvider{kind: "wrong"} }} {
 		r.Register("invalid", factory)
 		_, err := r.Get("invalid")
 		require.Error(t, err)

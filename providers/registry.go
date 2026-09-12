@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -38,10 +39,24 @@ func (r *Registry) Get(resourceType string) (Provider, error) {
 		return nil, fmt.Errorf("nil provider factory for resource type: %s", resourceType)
 	}
 	provider := factory()
-	if provider == nil || provider.Type() != resourceType {
+	if isNilProvider(provider) || provider.Type() != resourceType {
 		return nil, fmt.Errorf("invalid provider factory result for resource type: %s", resourceType)
 	}
 	return provider, nil
+}
+
+// Detects both nil interfaces and nil values held by provider interfaces without invoking provider methods.
+func isNilProvider(provider Provider) bool {
+	if provider == nil {
+		return true
+	}
+	value := reflect.ValueOf(provider)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Returns the registered resource types in lexical order.
