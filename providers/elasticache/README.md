@@ -42,7 +42,9 @@ ElastiCache Redis プロバイダーは、AWS ElastiCache for Redis のレプリ
 |------|-----|------|
 | `ClusterName` | string | レプリケーショングループ ID（クラスタ名） |
 | `ShardName` | string | ノードグループ ID（シャード名） |
-| `IsPrimary` | bool | プライマリノードかどうか（`true`: プライマリ、`false`: レプリカ） |
+| `RoleKnown` | bool | ノードのロールを取得できた場合に `true` |
+| `IsPrimary` | bool | `RoleKnown` が `true` の場合のプライマリ判定。クラスターモード有効時はキーを含まない |
+| `CacheClusterID` | string | ノードが属するキャッシュクラスター ID |
 
 ## 動作詳細
 
@@ -54,12 +56,15 @@ ElastiCache Redis プロバイダーは、AWS ElastiCache for Redis のレプリ
 
 ### 取得されるノード
 
-- クラスターモード無効のレプリケーショングループを対象とし、プライマリとレプリカのノードを取得する
-- クラスターモード有効のレプリケーショングループを検出した場合、検索をエラーで終了し、出力ファイルを更新しない
+- クラスターモードの有効・無効にかかわらず、各シャードの全ノードを取得する
+- クラスターモード有効時は `DescribeCacheClusters` のノード情報を取得し、`CacheClusterId` と `CacheNodeId` でメンバーに対応づける
 - 各ノードには、そのノードが属するレプリケーショングループのタグがすべて付与されます
-- ReadEndpoint が存在するノードのみが取得されます
+- クラスターモード無効時は `ReadEndpoint`、有効時はキャッシュノードの `Endpoint` を使用する
+- 接続情報が未取得のノードは警告を出して除外する。API 呼び出しの失敗時は検索全体をエラーとする
 
-ノードの `ReadEndpoint` はクラスターモード無効時のみ利用できる。API の適用範囲の詳細は、[AWS の NodeGroupMember 仕様](https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_NodeGroupMember.html)を参照。
+`ReadEndpoint` と `CurrentRole` はクラスターモード無効時のみ利用できる。有効時は `RoleKnown` を `false` とし、`IsPrimary` を含めない。プライマリだけを出力するテンプレートでは、ロール不明のノードは出力対象に含まれない。
+
+API の適用範囲とノード接続情報の取得方法は、[NodeGroupMember](https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_NodeGroupMember.html) と [DescribeCacheClusters](https://docs.aws.amazon.com/AmazonElastiCache/latest/APIReference/API_DescribeCacheClusters.html) を参照。
 
 ## 設定例
 
@@ -111,7 +116,7 @@ init_config:
 
 instances:
 {{- range .Resources }}
-  {{- if index .Metadata "IsPrimary" }}
+  {{- if and (index .Metadata "RoleKnown") (index .Metadata "IsPrimary") }}
   - host: {{ .Host }}
     port: {{ .Port }}
     username: "%%env_REDIS_USERNAME%%"
@@ -138,7 +143,7 @@ instances:
     tags:
       - "cluster:{{ index .Metadata "ClusterName" }}"
       - "shard:{{ index .Metadata "ShardName" }}"
-      - "role:{{ if index .Metadata "IsPrimary" }}primary{{ else }}replica{{ end }}"
+      - "role:{{ if not (index .Metadata "RoleKnown") }}unknown{{ else if index .Metadata "IsPrimary" }}primary{{ else }}replica{{ end }}"
     {{- range $key, $value := .Tags }}
       - "{{ $key }}:{{ $value }}"
     {{- end }}
@@ -157,6 +162,7 @@ instances:
       "Effect": "Allow",
       "Action": [
         "elasticache:DescribeReplicationGroups",
+        "elasticache:DescribeCacheClusters",
         "tag:GetResources"
       ],
       "Resource": "*"

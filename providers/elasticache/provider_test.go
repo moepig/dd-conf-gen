@@ -32,6 +32,15 @@ func (m *MockElastiCacheClient) DescribeReplicationGroups(ctx context.Context, p
 	return args.Get(0).(*elasticache.DescribeReplicationGroupsOutput), args.Error(1)
 }
 
+// Records cache node queries and returns the configured page or error.
+func (m *MockElastiCacheClient) DescribeCacheClusters(ctx context.Context, params *elasticache.DescribeCacheClustersInput, optFns ...func(*elasticache.Options)) (*elasticache.DescribeCacheClustersOutput, error) {
+	args := m.Called(ctx, params, optFns)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*elasticache.DescribeCacheClustersOutput), args.Error(1)
+}
+
 // Holds mocked resource tag API calls and results.
 type MockResourceGroupsTaggingClient struct {
 	mock.Mock
@@ -109,32 +118,6 @@ func TestExtractNodesOwnTags(t *testing.T) {
 	assert.Equal(t, "prod", tags["env"])
 	tags["env"] = "staging"
 	assert.Equal(t, "prod", nodes[1].Tags["env"])
-}
-
-// Returns cluster-mode groups from mocked APIs for filtered and unfiltered searches; requires an unsupported-mode error and no resources.
-func TestProvider_DiscoverClusterMode(t *testing.T) {
-	for _, filtered := range []bool{false, true} {
-		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
-			tagging := new(MockResourceGroupsTaggingClient)
-			client := new(MockElastiCacheClient)
-			p := NewProviderWithClients(client, tagging)
-			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{
-				ResourceTagMappingList: []taggingtypes.ResourceTagMapping{{ResourceARN: aws.String("arn:aws:elasticache:us-east-1:123456789012:replicationgroup:cluster")}},
-			}, nil).Once()
-			client.On("DescribeReplicationGroups", mock.Anything, mock.Anything, mock.Anything).Return(&elasticache.DescribeReplicationGroupsOutput{
-				ReplicationGroups: []elasticachetypes.ReplicationGroup{{ReplicationGroupId: aws.String("cluster"), ClusterEnabled: aws.Bool(true)}},
-			}, nil).Once()
-			cfg := providers.ProviderConfig{Region: "us-east-1"}
-			if filtered {
-				cfg.Filters = map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}}
-			}
-			result, err := discoverForTest(p, context.Background(), cfg)
-			require.ErrorContains(t, err, "replication group cluster uses unsupported cluster mode")
-			assert.Nil(t, result)
-			tagging.AssertExpectations(t)
-			client.AssertExpectations(t)
-		})
-	}
 }
 
 // Supplies non-string tag values with API mocks that accept no calls and requires validation errors before API access.

@@ -24,10 +24,12 @@ type Provider struct {
 	taggingClient     ResourceGroupsTaggingAPI
 }
 
-// Provides replication group queries.
+// Provides replication group and cache node queries.
 type ElastiCacheAPI interface {
 	// Queries with params and optFns using ctx for cancellation, returning a response page or an API error.
 	DescribeReplicationGroups(ctx context.Context, params *elasticache.DescribeReplicationGroupsInput, optFns ...func(*elasticache.Options)) (*elasticache.DescribeReplicationGroupsOutput, error)
+	// Queries cache nodes with params and optFns, returning a response page or an API error.
+	DescribeCacheClusters(ctx context.Context, params *elasticache.DescribeCacheClustersInput, optFns ...func(*elasticache.Options)) (*elasticache.DescribeCacheClustersOutput, error)
 }
 
 // Provides resource tag queries.
@@ -53,7 +55,7 @@ func (p *Provider) Type() string {
 
 // Discovers Redis nodes using validated settings and ctx for cancellation and logging.
 //
-// Returns nodes matching settings.tags in settings.region, or all groups when tags are empty. Returns nil and an error on cancellation, client configuration failure, invalid responses, unsupported cluster mode, or API failure.
+// Returns nodes matching settings.tags in settings.region, or all groups when tags are empty. Returns nil and an error on cancellation, client configuration failure, invalid responses or API failure.
 func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]providers.Resource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -92,9 +94,11 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 			if !settings.conditions.Matches(arnToTags[aws.ToString(group.ARN)]) {
 				continue
 			}
-			result = append(result, extractNodesFromReplicationGroups(ctx,
-				[]elasticachetypes.ReplicationGroup{group}, aws.ToString(group.ReplicationGroupId), arnToTags[aws.ToString(group.ARN)],
-			)...)
+			nodes, err := p.extractGroupNodes(ctx, group, arnToTags[aws.ToString(group.ARN)])
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, nodes...)
 		}
 		return result, nil
 	}
@@ -132,7 +136,14 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 			"replication_group_id", id,
 			"node_groups_count", len(groups[0].NodeGroups))
 
-		nodes := extractNodesFromReplicationGroups(ctx, groups, id, tagsFromMapping(mapping))
+		var nodes []providers.Resource
+		for _, group := range groups {
+			discovered, err := p.extractGroupNodes(ctx, group, tagsFromMapping(mapping))
+			if err != nil {
+				return nil, err
+			}
+			nodes = append(nodes, discovered...)
+		}
 		logging.FromContext(ctx).Debug("Extracted nodes from replication group",
 			"replication_group_id", id,
 			"nodes_count", len(nodes))
@@ -145,7 +156,7 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 
 // Retrieves replication groups across pages using non-nil input and ctx for API cancellation.
 //
-// Returns all groups without modifying input, or nil and an error for API failure, a nil response, cluster mode, or repeated pagination markers.
+// Returns all groups without modifying input, or nil and an error for API failure, a nil response, or repeated pagination markers.
 func (p *Provider) describeReplicationGroups(ctx context.Context, input *elasticache.DescribeReplicationGroupsInput) ([]elasticachetypes.ReplicationGroup, error) {
 	var result []elasticachetypes.ReplicationGroup
 	seenMarkers := make(map[string]bool)
@@ -156,11 +167,6 @@ func (p *Provider) describeReplicationGroups(ctx context.Context, input *elastic
 		}
 		if output == nil {
 			return nil, fmt.Errorf("empty response describing replication groups")
-		}
-		for _, group := range output.ReplicationGroups {
-			if aws.ToBool(group.ClusterEnabled) {
-				return nil, fmt.Errorf("replication group %s uses unsupported cluster mode", aws.ToString(group.ReplicationGroupId))
-			}
 		}
 		result = append(result, output.ReplicationGroups...)
 		marker := aws.ToString(output.Marker)
@@ -308,6 +314,7 @@ func extractNodesFromReplicationGroups(ctx context.Context, replicationGroups []
 							"ClusterName":    clusterName,
 							"ShardName":      shardName,
 							"IsPrimary":      isPrimary,
+							"RoleKnown":      aws.ToString(member.CurrentRole) == "primary" || aws.ToString(member.CurrentRole) == "replica",
 							"CacheClusterID": aws.ToString(member.CacheClusterId),
 						},
 					}
