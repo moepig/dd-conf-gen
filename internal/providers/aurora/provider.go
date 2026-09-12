@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/moepig/dd-conf-gen/internal/logging"
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 )
 
 // Discovers Aurora MySQL instance endpoints using an optional RDS client.

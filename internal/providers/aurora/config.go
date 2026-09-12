@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/moepig/dd-conf-gen/internal/providers"
 	"github.com/moepig/dd-conf-gen/internal/tagfilter"
-	"github.com/moepig/dd-conf-gen/providers"
 )
 
 // Holds a validated region and independently owned cluster tag filters.

@@ -3,7 +3,7 @@ package elasticache
 import (
 	"testing"
 
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

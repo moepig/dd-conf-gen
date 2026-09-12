@@ -1,4 +1,4 @@
-package main
+package tests
 
 import (
 	"os"
@@ -14,7 +14,7 @@ import (
 // Executes the CI test gate with a mocked GitHub CLI, rejecting failed or skipped tests and API errors.
 func TestDependabotTestGate(t *testing.T) {
 	t.Parallel()
-	data, err := os.ReadFile(".github/workflows/dependabot-auto-merge.yml")
+	data, err := os.ReadFile("../.github/workflows/dependabot-auto-merge.yml")
 	require.NoError(t, err)
 	var workflow struct {
 		On   map[string]interface{} `yaml:"on"`

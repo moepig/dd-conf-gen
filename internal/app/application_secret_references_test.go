@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/moepig/dd-conf-gen/config"
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/config"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,12 +23,12 @@ func TestApplicationSecretReferences(t *testing.T) {
 		{Host: "a.example", Port: 3306, Tags: map[string]string{"team": "team-a"}},
 		{Host: "b.example", Port: 3306, Tags: map[string]string{"team": "team-b"}},
 	}, nil).Once()
-	cfg, err := config.LoadGenConfig("examples/gen-config-secrets.yaml")
+	cfg, err := config.LoadGenConfig("../../examples/gen-config-secrets.yaml")
 	require.NoError(t, err)
 	cfg.Resources[0].Type = provider.Type()
 	dir := t.TempDir()
 	cfg.Outputs[0].OutputFile = filepath.Join(dir, "mysql.yaml")
-	cfg.Outputs[0].Template, err = filepath.Abs("examples/templates/mysql-secrets.yaml.tmpl")
+	cfg.Outputs[0].Template, err = filepath.Abs("../../examples/templates/mysql-secrets.yaml.tmpl")
 	require.NoError(t, err)
 	path := writeRunConfig(t, dir, *cfg)
 	require.NoError(t, app.run(context.Background(), path))

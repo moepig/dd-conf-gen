@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/moepig/dd-conf-gen/config"
-	"github.com/moepig/dd-conf-gen/output"
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/config"
+	"github.com/moepig/dd-conf-gen/internal/output"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

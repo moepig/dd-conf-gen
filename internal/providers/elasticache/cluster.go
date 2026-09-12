@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	elasticachetypes "github.com/aws/aws-sdk-go-v2/service/elasticache/types"
 	"github.com/moepig/dd-conf-gen/internal/logging"
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 )
 
 // Extracts a group's nodes, querying cache node endpoints for cluster mode. Returns no partial resources on API or identity errors.

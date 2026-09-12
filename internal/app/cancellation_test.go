@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moepig/dd-conf-gen/config"
+	"github.com/moepig/dd-conf-gen/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

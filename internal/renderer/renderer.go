@@ -9,7 +9,7 @@ import (
 	"text/template"
 
 	"github.com/moepig/dd-conf-gen/internal/logging"
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 	"gopkg.in/yaml.v3"
 )
 

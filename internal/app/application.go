@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -6,17 +6,18 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/moepig/dd-conf-gen/config"
+	"github.com/moepig/dd-conf-gen/internal/config"
 	"github.com/moepig/dd-conf-gen/internal/logging"
-	"github.com/moepig/dd-conf-gen/output"
-	"github.com/moepig/dd-conf-gen/providers"
-	"github.com/moepig/dd-conf-gen/renderer"
+	"github.com/moepig/dd-conf-gen/internal/output"
+	"github.com/moepig/dd-conf-gen/internal/providers"
+	"github.com/moepig/dd-conf-gen/internal/renderer"
 )
 
-// Holds the provider registry and output writer for a generation run.
+// Holds the CLI version, provider registry, and output writer.
 type application struct {
 	registry *providers.Registry
 	writer   outputWriter
+	version  string
 }
 
 // Prepares destinations and saves output contents. Failures are returned as errors.

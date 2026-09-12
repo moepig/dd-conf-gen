@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moepig/dd-conf-gen/config"
-	"github.com/moepig/dd-conf-gen/providers"
-	"github.com/moepig/dd-conf-gen/providers/aurora"
-	"github.com/moepig/dd-conf-gen/providers/elasticache"
-	"github.com/moepig/dd-conf-gen/renderer"
+	"github.com/moepig/dd-conf-gen/internal/config"
+	"github.com/moepig/dd-conf-gen/internal/providers"
+	"github.com/moepig/dd-conf-gen/internal/providers/aurora"
+	"github.com/moepig/dd-conf-gen/internal/providers/elasticache"
+	"github.com/moepig/dd-conf-gen/internal/renderer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -19,7 +19,7 @@ import (
 // Loads every distributed configuration, validates providers without API access, and renders empty and representative resources to verify YAML, role selection, DBM settings, and unresolved secret references.
 func TestDistributedExamples(t *testing.T) {
 	t.Parallel()
-	paths, err := filepath.Glob("examples/gen-config*.yaml")
+	paths, err := filepath.Glob("../../examples/gen-config*.yaml")
 	require.NoError(t, err)
 	require.NotEmpty(t, paths)
 	registry := providers.NewRegistry(map[string]providers.Factory{

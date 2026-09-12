@@ -1,17 +1,17 @@
-package main
+package app
 
 import (
 	"bytes"
 	"context"
-	"github.com/moepig/dd-conf-gen/internal/logging"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/moepig/dd-conf-gen/config"
-	"github.com/moepig/dd-conf-gen/output"
-	"github.com/moepig/dd-conf-gen/providers"
+	"github.com/moepig/dd-conf-gen/internal/config"
+	"github.com/moepig/dd-conf-gen/internal/logging"
+	"github.com/moepig/dd-conf-gen/internal/output"
+	"github.com/moepig/dd-conf-gen/internal/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -228,7 +228,7 @@ func TestCLI(t *testing.T) {
 		stderr string
 	}
 	tests := []cliTest{
-		{name: "version", args: []string{"-version"}, stdout: version + "\n"},
+		{name: "version", args: []string{"-version"}, stdout: "test-version\n"},
 		{name: "help", args: []string{"-help"}, stderr: "Usage of dd-conf-gen:"},
 		{name: "missing config", code: 1, stderr: "-config option is required"},
 		{name: "invalid log level", args: []string{"-log-level=invalid"}, code: 2, stderr: "invalid value"},
@@ -245,7 +245,7 @@ func TestCLI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			app := &application{registry: &providers.Registry{}}
+			app := &application{registry: &providers.Registry{}, version: "test-version"}
 			var stdout, stderr bytes.Buffer
 			originalLogger := slog.Default()
 			code := app.runCLI(context.Background(), tt.args, &stdout, &stderr)

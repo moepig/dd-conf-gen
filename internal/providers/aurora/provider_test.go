@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
-	"github.com/moepig/dd-conf-gen/providers"
-	"github.com/moepig/dd-conf-gen/renderer"
+	"github.com/moepig/dd-conf-gen/internal/providers"
+	"github.com/moepig/dd-conf-gen/internal/renderer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -381,7 +381,7 @@ func TestMySQLTemplate(t *testing.T) {
 	require.NoError(t, err)
 	resources, err := discover(context.Background())
 	require.NoError(t, err)
-	template, err := renderer.Compile(context.Background(), "../../examples/templates/mysql.yaml.tmpl")
+	template, err := renderer.Compile(context.Background(), "../../../examples/templates/mysql.yaml.tmpl")
 	require.NoError(t, err)
 	content, err := template.Render(context.Background(), renderer.TemplateData{Resources: resources})
 	require.NoError(t, err)
