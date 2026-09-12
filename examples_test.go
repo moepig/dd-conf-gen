@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/moepig/dd-conf-gen/config"
@@ -15,7 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Loads every distributed configuration, validates providers without API access, and renders every template with empty and representative resources to verify valid YAML, role selection, and quoting.
+// Loads every distributed configuration, validates providers without API access, and renders empty and representative resources to verify YAML, role selection, DBM settings, and unresolved secret references.
 func TestDistributedExamples(t *testing.T) {
 	t.Parallel()
 	paths, err := filepath.Glob("examples/gen-config*.yaml")
@@ -42,25 +43,30 @@ func TestDistributedExamples(t *testing.T) {
 						tagValue := "Production: # special\n\"quoted\""
 						if scenario != "empty" {
 							for _, primary := range []bool{true, false} {
-								metadata := map[string]interface{}{"ClusterName": "cluster", "DBInstanceID": "instance", "IsWriter": primary, "IsPrimary": primary, "RoleKnown": true}
+								metadata := map[string]interface{}{"ClusterName": "cluster", "CacheClusterID": "cache-node", "DBInstanceID": "instance", "IsWriter": primary, "IsPrimary": primary, "RoleKnown": true}
 								if scenario == "unknown" {
 									delete(metadata, "IsPrimary")
 									metadata["RoleKnown"] = false
 								}
-								resources = append(resources, providers.Resource{Host: "node.example", Port: 6379, Tags: map[string]string{"awsenv": tagValue, "env": tagValue, "service": "team: ops"}, Metadata: metadata})
+								team := "team-a"
+								if !primary {
+									team = "team-b"
+								}
+								resources = append(resources, providers.Resource{Host: "node.example", Port: 6379, Tags: map[string]string{"awsenv": tagValue, "env": tagValue, "service": "team: ops", "team": team}, Metadata: metadata})
 							}
 						}
-						secretValues := map[string]string{}
-						for name := range out.Data.Secrets {
-							secretValues[name] = "value: # special\n\"quoted\""
-						}
-						data, err := template.Render(context.Background(), renderer.TemplateData{Resources: resources, Secrets: secretValues})
+						data, err := template.Render(context.Background(), renderer.TemplateData{Resources: resources})
 						require.NoError(t, err)
 						var parsed struct {
 							Instances []struct {
 								Host, Username, Password string
 								Port                     int
 								Tags                     []string
+								DBM                      bool
+								AWS                      struct {
+									InstanceEndpoint string `yaml:"instance_endpoint"`
+									Region           string
+								}
 							}
 						}
 						require.NoError(t, yaml.Unmarshal(data, &parsed), string(data))
@@ -79,18 +85,31 @@ func TestDistributedExamples(t *testing.T) {
 							}
 						}
 						require.Len(t, parsed.Instances, expected)
-						for _, instance := range parsed.Instances {
+						for i, instance := range parsed.Instances {
 							assert.Equal(t, "node.example", instance.Host)
 							assert.Equal(t, 6379, instance.Port)
+							engine := "redis"
+							if strings.HasPrefix(filepath.Base(out.Template), "mysql") {
+								engine = "mysql"
+								assert.True(t, instance.DBM)
+								assert.Equal(t, instance.Host, instance.AWS.InstanceEndpoint)
+								assert.Equal(t, "ap-northeast-1", instance.AWS.Region)
+							}
+							secretID := "monitoring/" + engine
+							if strings.HasSuffix(out.Template, "-secrets.yaml.tmpl") {
+								teams := []string{"team-a", "team-b"}
+								secretID = "production/" + teams[i] + "/" + engine + "/monitoring"
+							}
+							assert.Equal(t, "ENC["+secretID+";username]", instance.Username)
+							assert.Equal(t, "ENC["+secretID+";password]", instance.Password)
 							switch filepath.Base(out.Template) {
 							case "redis.yaml.tmpl":
 								assert.Contains(t, instance.Tags, "env:"+tagValue)
 								assert.Contains(t, instance.Tags, "team:team: ops")
 							case "mysql.yaml.tmpl":
 								assert.Contains(t, instance.Tags, "env:"+tagValue)
-							case "mysql-secrets.yaml.tmpl":
-								assert.Equal(t, secretValues["username"], instance.Username)
-								assert.Equal(t, secretValues["password"], instance.Password)
+							case "redis-secrets.yaml.tmpl":
+								assert.Contains(t, instance.Tags, "cacheclusterid:cache-node")
 							}
 						}
 					})

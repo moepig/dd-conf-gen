@@ -18,6 +18,7 @@ func TestLoadGenConfigStrictYAML(t *testing.T) {
 		"resource":                  strings.Replace(valid, "filters:", "filter:", 1),
 		"output":                    strings.Replace(valid, "    data:", "    unknown: true\n    data:", 1),
 		"output data":               valid + "      unknown: true\n",
+		"removed secrets field":     valid + "      secrets: {}\n",
 		"second document":           valid + "---\nresources: []\noutputs: []\n",
 		"empty second document":     valid + "---\n",
 		"malformed second document": valid + "---\n[",

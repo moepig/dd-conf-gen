@@ -1,0 +1,4 @@
+secret_backend_type: aws.secrets
+secret_backend_config:
+  aws_session:
+    aws_region: ap-northeast-1

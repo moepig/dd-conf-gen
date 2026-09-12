@@ -98,15 +98,15 @@ instances:
 		assert.Equal(t, expected, string(result))
 	})
 
-	t.Run("template with hardcoded values", func(t *testing.T) {
+	t.Run("template with literal secret references", func(t *testing.T) {
 		templateContent := `init_config:
 
 instances:
 {{- range .Resources }}
   - host: {{ .Host }}
     port: {{ .Port }}
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
+    username: "ENC[monitoring/redis;username]"
+    password: "ENC[monitoring/redis;password]"
 {{- end }}
 `
 		tmpfile := createTempFile(t, templateContent)
@@ -129,8 +129,8 @@ instances:
 instances:
   - host: redis1.example.com
     port: 6379
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
+    username: "ENC[monitoring/redis;username]"
+    password: "ENC[monitoring/redis;password]"
 `
 		assert.Equal(t, expected, string(result))
 	})

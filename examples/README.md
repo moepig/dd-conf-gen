@@ -13,7 +13,8 @@
 | [gen-config-redis-roles.yaml](gen-config-redis-roles.yaml) | 1 回の Redis 検索から全ノード用とプライマリ用の設定を生成する |
 | [gen-config-aurora-mysql.yaml](gen-config-aurora-mysql.yaml) | Aurora MySQL の全 DB インスタンス用の設定を生成する |
 | [gen-config-aurora-roles.yaml](gen-config-aurora-roles.yaml) | 1 回の Aurora 検索から全インスタンス用と Writer 用の設定を生成する |
-| [gen-config-secrets.yaml](gen-config-secrets.yaml) | MySQL のユーザー名とパスワードを Secrets Manager から取得する |
+| [gen-config-secrets.yaml](gen-config-secrets.yaml) | team タグに応じた Secrets Manager の参照名を DBM のチェック設定へ出力する |
+| [gen-config-redis-secrets.yaml](gen-config-redis-secrets.yaml) | team タグに応じた Secrets Manager の参照名を Redis のチェック設定へ出力する |
 
 ## 実行手順
 
@@ -25,7 +26,9 @@
 dd-conf-gen -config examples/gen-config-multi-region.yaml
 ```
 
-テンプレートの相対パスは生成設定のあるディレクトリから解決する。シークレット参照を使わない例は、Datadog Agent の環境変数参照を出力する。`REDIS_USERNAME`・`REDIS_PASSWORD` または `MYSQL_USERNAME`・`MYSQL_PASSWORD` を Agent の実行環境で設定する必要がある。
+テンプレートの相対パスは生成設定のあるディレクトリから解決する。すべての配布テンプレートは ENC 参照を出力する。基本例は monitoring/redis または monitoring/mysql の username と password を参照する。参照名を対象環境に合わせて変更すること。
+
+Agent のシークレットバックエンド設定の抜粋は [datadog.yaml](datadog.yaml) に配置している。Agent の設定へ組み込み、タスクロールと Secrets Manager への接続を設定する必要がある。API キーなどの Agent 全体の設定は別途用意する。MySQL の配布テンプレートは DBM を有効にするため、DB 側の監視ユーザー、権限、パラメータも設定すること。
 
 ## 複数の出力とロール選択
 
@@ -59,6 +62,6 @@ Aurora の Writer 用テンプレートは `IsWriter` が `true` のインスタ
 
 ## シークレット参照
 
-Secrets Manager の例では、`production/mysql/monitoring` という JSON シークレットの `username` と `password` を使用する。実際のシークレット名に変更して実行すること。取得値を含むファイルのアクセス権は `0600` になる。
+Secrets Manager の例では、team-a と team-b の条件から参照名を選択し、`ENC[...]` を出力する。シークレットの値の取得は Agent が行う。生成コマンドに Secrets Manager の取得権限は不要である。
 
-権限、バージョン指定、ローテーションの反映方法は、[Secrets Manager のシークレット参照](../docs/secrets.md) を参照。
+条件と参照名の対応、Agent の設定、権限、ローテーションの反映方法は、[Agent によるシークレット参照](../docs/secrets.md) を参照。

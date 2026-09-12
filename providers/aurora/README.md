@@ -34,9 +34,9 @@ Datadog が指定する Aurora の接続先については、[Aurora MySQL の D
 dd-conf-gen -config examples/gen-config-aurora-mysql.yaml
 ```
 
-`output_file` は保存先に合わせて変更すること。テンプレートには Datadog Agent の環境変数参照 `%%env_MYSQL_USERNAME%%` と `%%env_MYSQL_PASSWORD%%` を記述している。接続情報は Datadog Agent の実行環境で設定する必要がある。DB の監視ユーザーと権限は別途設定する。
+output_file は保存先に合わせて変更すること。テンプレートは monitoring/mysql の username と password を ENC 参照として出力する。参照名とテンプレート内の AWS リージョンを対象環境に合わせ、Agent 側のシークレットバックエンドを設定する必要がある。条件別の参照方法は、[Agent によるシークレット参照](../../docs/secrets.md) を参照。
 
-このテンプレートは MySQL チェック用である。Database Monitoring を有効にする場合は、上記の Datadog 設定手順に従って DB と Agent を設定し、テンプレートへ `dbm: true` などの必要な項目を追加すること。
+配布する MySQL テンプレートは dbm: true を出力する。DB の監視ユーザー、権限、DBM に必要な DB パラメータは、上記の Datadog 設定手順に従って別途設定すること。
 
 ## テンプレートデータ
 

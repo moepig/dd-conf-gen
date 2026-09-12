@@ -399,8 +399,8 @@ func TestMySQLTemplate(t *testing.T) {
 	assert.Equal(t, "reader.example.rds.amazonaws.com", cfg.Instances[1].Host)
 	for _, instance := range cfg.Instances {
 		assert.Equal(t, 3306, instance.Port)
-		assert.Equal(t, "%%env_MYSQL_USERNAME%%", instance.Username)
-		assert.Equal(t, "%%env_MYSQL_PASSWORD%%", instance.Password)
+		assert.Equal(t, "ENC[monitoring/mysql;username]", instance.Username)
+		assert.Equal(t, "ENC[monitoring/mysql;password]", instance.Password)
 		assert.Contains(t, instance.Tags, "env:prod")
 		assert.Contains(t, instance.Tags, "cluster:production")
 	}

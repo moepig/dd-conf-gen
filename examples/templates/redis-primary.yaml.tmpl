@@ -7,8 +7,8 @@ instances:
   {{- $found = true }}
   - host: {{ .Host | quote }}
     port: {{ .Port }}
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
+    username: "ENC[monitoring/redis;username]"
+    password: "ENC[monitoring/redis;password]"
     tags:
       - "role:primary"
       - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}

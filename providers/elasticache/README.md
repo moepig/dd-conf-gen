@@ -68,6 +68,8 @@ API の適用範囲とノード接続情報の取得方法は、[NodeGroupMember
 
 ## 設定例
 
+テンプレートは monitoring/redis の username と password を ENC 参照として出力する。参照名を対象環境に合わせ、Agent 側のシークレットバックエンドを設定する必要がある。条件別の参照方法は、[Agent によるシークレット参照](../../docs/secrets.md) を参照。
+
 ### 生成設定ファイル (gen-config.yaml)
 
 ```yaml
@@ -102,8 +104,8 @@ instances:
 {{- range .Resources }}
   - host: {{ .Host | quote }}
     port: {{ .Port }}
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
+    username: "ENC[monitoring/redis;username]"
+    password: "ENC[monitoring/redis;password]"
     tags:
       - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}
       - {{ printf "shard:%s" (index .Metadata "ShardName") | quote }}
@@ -132,8 +134,8 @@ instances:
 {{- range .Resources }}
   - host: {{ .Host | quote }}
     port: {{ .Port }}
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
+    username: "ENC[monitoring/redis;username]"
+    password: "ENC[monitoring/redis;password]"
     tags:
       - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}
       - {{ printf "shard:%s" (index .Metadata "ShardName") | quote }}

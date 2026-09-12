@@ -13,10 +13,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Holds resources and resolved secret strings available to template expressions.
+// Holds resources available to template expressions.
 type TemplateData struct {
 	Resources []providers.Resource
-	Secrets   map[string]string
 }
 
 // Holds a parsed template that can be rendered without rereading the source file.
@@ -49,7 +48,7 @@ func Compile(ctx context.Context, templatePath string) (*CompiledTemplate, error
 
 // Renders data with the compiled template, using ctx for cancellation and logging.
 //
-// Returns independently buffered output, or nil and an execution or cancellation error with no partial content. Execution error details are hidden when secret values are present.
+// Returns independently buffered output, or nil and an execution or cancellation error with no partial content.
 func (t *CompiledTemplate) Render(ctx context.Context, data TemplateData) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -60,9 +59,6 @@ func (t *CompiledTemplate) Render(ctx context.Context, data TemplateData) ([]byt
 	if err := t.template.Execute(contextWriter{ctx: ctx, buffer: &buf}, data); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
-		}
-		if len(data.Secrets) > 0 {
-			return nil, fmt.Errorf("failed to execute template (details hidden because secret values are present)")
 		}
 		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}

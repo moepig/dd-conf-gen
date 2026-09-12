@@ -7,8 +7,12 @@ instances:
   {{- $found = true }}
   - host: {{ .Host | quote }}
     port: {{ .Port }}
-    username: "%%env_MYSQL_USERNAME%%"
-    password: "%%env_MYSQL_PASSWORD%%"
+    dbm: true
+    username: "ENC[monitoring/mysql;username]"
+    password: "ENC[monitoring/mysql;password]"
+    aws:
+      instance_endpoint: {{ .Host | quote }}
+      region: ap-northeast-1
     tags:
       - "role:writer"
       - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}

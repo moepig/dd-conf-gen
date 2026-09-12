@@ -11,14 +11,12 @@ import (
 	"github.com/moepig/dd-conf-gen/output"
 	"github.com/moepig/dd-conf-gen/providers"
 	"github.com/moepig/dd-conf-gen/renderer"
-	"github.com/moepig/dd-conf-gen/secrets"
 )
 
 // Holds the provider registry and output writer for a generation run.
 type application struct {
-	registry            *providers.Registry
-	writer              outputWriter
-	secretClientFactory secrets.ClientFactory
+	registry *providers.Registry
+	writer   outputWriter
 }
 
 // Prepares destinations and saves output contents. Failures are returned as errors.
@@ -105,7 +103,6 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 	}
 
 	logging.FromContext(ctx).Info("Generating output files")
-	resolver := secrets.NewResolver(app.secretClientFactory)
 	var outputs []generatedOutput
 	for _, prepared := range preparedOutputs {
 		path := prepared.destination.Path()
@@ -125,12 +122,7 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 			}
 		}
 
-		secretValues, err := resolver.Resolve(ctx, prepared.secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve secrets for output '%s': %w", path, err)
-		}
 		templateData := renderer.TemplateData{
-			Secrets:   secretValues,
 			Resources: discoveredResources,
 		}
 
@@ -181,7 +173,6 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 type preparedOutput struct {
 	resourceNames []string
 	onEmpty       string
-	secrets       map[string]secrets.Reference
 	destination   output.Destination
 	template      *renderer.CompiledTemplate
 }
@@ -203,7 +194,7 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", out.OutputFile, err)
 		}
-		prepared = append(prepared, preparedOutput{resourceNames: out.Data.Names(), onEmpty: out.OnEmpty, secrets: out.Data.Secrets, template: template})
+		prepared = append(prepared, preparedOutput{resourceNames: out.Data.Names(), onEmpty: out.OnEmpty, template: template})
 	}
 	paths := make(map[string]int, len(outputs))
 	for i, out := range outputs {
@@ -218,9 +209,6 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 			return nil, fmt.Errorf("output[%d]: duplicate output_file with output[%d]: %s", i, previous, out.OutputFile)
 		}
 		paths[destination.Path()] = i
-		if len(out.Data.Secrets) > 0 {
-			destination = destination.Restricted()
-		}
 		prepared[i].destination = destination
 	}
 	return prepared, nil

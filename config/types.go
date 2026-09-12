@@ -1,7 +1,5 @@
 package config
 
-import "github.com/moepig/dd-conf-gen/secrets"
-
 // Holds resource search definitions and ordered output definitions.
 type GenConfig struct {
 	Resources []ResourceConfig `yaml:"resources"`
@@ -24,11 +22,10 @@ type OutputConfig struct {
 	OnEmpty    string     `yaml:"on_empty,omitempty"`
 }
 
-// Holds resource selection and named secret references for an output.
+// Holds resource selection for an output.
 type OutputData struct {
-	ResourceName  string                       `yaml:"resource_name,omitempty"`
-	ResourceNames []string                     `yaml:"resource_names,omitempty"`
-	Secrets       map[string]secrets.Reference `yaml:"secrets,omitempty"`
+	ResourceName  string   `yaml:"resource_name,omitempty"`
+	ResourceNames []string `yaml:"resource_names,omitempty"`
 }
 
 // Returns the selected resource names in configured priority order.
