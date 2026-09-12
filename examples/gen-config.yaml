@@ -1,5 +1,3 @@
-version: "1.0"
-
 # リソース定義（データソース）
 resources:
   - name: production_redis_nodes
