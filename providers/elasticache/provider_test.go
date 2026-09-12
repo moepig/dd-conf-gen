@@ -49,6 +49,22 @@ func TestProvider_Type(t *testing.T) {
 	assert.Equal(t, "elasticache_redis", provider.Type())
 }
 
+// Mutating one node's tags or the input tags must not change another node's tags.
+func TestExtractNodesOwnTags(t *testing.T) {
+	tags := map[string]string{"env": "prod"}
+	groups := []elasticachetypes.ReplicationGroup{{NodeGroups: []elasticachetypes.NodeGroup{{NodeGroupMembers: []elasticachetypes.NodeGroupMember{
+		{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("first"), Port: aws.Int32(6379)}},
+		{ReadEndpoint: &elasticachetypes.Endpoint{Address: aws.String("second"), Port: aws.Int32(6379)}},
+	}}}}}
+	nodes := extractNodesFromReplicationGroups(context.Background(), groups, "cluster", tags)
+	require.Len(t, nodes, 2)
+	nodes[0].Tags["env"] = "test"
+	assert.Equal(t, "prod", nodes[1].Tags["env"])
+	assert.Equal(t, "prod", tags["env"])
+	tags["env"] = "staging"
+	assert.Equal(t, "prod", nodes[1].Tags["env"])
+}
+
 // Cluster mode must fail discovery for both filtered and unfiltered searches instead of generating empty output.
 func TestProvider_DiscoverClusterMode(t *testing.T) {
 	for _, filtered := range []bool{false, true} {

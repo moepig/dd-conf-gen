@@ -3,6 +3,7 @@ package elasticache
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -315,7 +316,7 @@ func extractNodesFromReplicationGroups(ctx context.Context, replicationGroups []
 					resource := providers.Resource{
 						Host: *member.ReadEndpoint.Address,
 						Port: int(*member.ReadEndpoint.Port),
-						Tags: tags,
+						Tags: maps.Clone(tags),
 						Metadata: map[string]interface{}{
 							"ClusterName":    clusterName,
 							"ShardName":      shardName,
