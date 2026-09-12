@@ -49,14 +49,12 @@ func (p *Provider) Type() string {
 	return providerType
 }
 
-// Discover retrieves ElastiCache Redis resources based on the configuration
-func (p *Provider) Discover(ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
-	logging.FromContext(ctx).Debug("Starting ElastiCache Redis discovery", "region", cfg.Region)
-
-	settings, err := parseConfig(cfg)
-	if err != nil {
+// Retrieves Redis nodes using validated settings, returning no partial result on API errors.
+func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]providers.Resource, error) {
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	logging.FromContext(ctx).Debug("Starting ElastiCache Redis discovery", "region", settings.region)
 
 	clientProvider, err := p.forRegion(ctx, settings.region)
 	if err != nil {

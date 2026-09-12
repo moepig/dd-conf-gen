@@ -1,6 +1,7 @@
 package elasticache
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/moepig/dd-conf-gen/providers"
@@ -11,10 +12,16 @@ type discoveryConfig struct {
 	tags   map[string]string
 }
 
-// Validates provider settings without loading AWS configuration or calling APIs.
-func (p *Provider) ValidateConfig(cfg providers.ProviderConfig) error {
-	_, err := parseConfig(cfg)
-	return err
+// Validates and snapshots settings and clients without external access, returning a prepared search or an error.
+func (p *Provider) Prepare(cfg providers.ProviderConfig) (providers.Discovery, error) {
+	settings, err := parseConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	local := *p
+	return func(ctx context.Context) ([]providers.Resource, error) {
+		return local.discover(ctx, settings)
+	}, nil
 }
 
 // Converts raw provider settings into independently owned, typed discovery settings.

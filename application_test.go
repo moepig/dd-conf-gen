@@ -32,12 +32,12 @@ func TestApplicationPreflight(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			app, provider := newTestApplication(t)
-			provider.On("ValidateConfig", providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return(nil).Once()
+			provider.On("Prepare", providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return(nil).Once()
 			secondType := provider.Type()
 			if unknown {
 				secondType = "unknown"
 			} else {
-				provider.On("ValidateConfig", providers.ProviderConfig{Region: "us-west-2", Filters: map[string]interface{}{}}).Return(assert.AnError).Once()
+				provider.On("Prepare", providers.ProviderConfig{Region: "us-west-2", Filters: map[string]interface{}{}}).Return(assert.AnError).Once()
 			}
 			writer := new(mockOutputWriter)
 			writer.Test(t)
@@ -72,7 +72,7 @@ func TestApplicationOutputFailures(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			app, provider := newTestApplication(t)
-			provider.On("ValidateConfig", mock.Anything).Return(nil).Once()
+			provider.On("Prepare", mock.Anything).Return(nil).Once()
 			writer := new(mockOutputWriter)
 			writer.Test(t)
 			app.writer = writer

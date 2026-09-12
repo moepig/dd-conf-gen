@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -18,16 +17,12 @@ type registryMockProvider struct {
 
 func (p *registryMockProvider) Type() string { return p.kind }
 
-func (p *registryMockProvider) ValidateConfig(cfg ProviderConfig) error {
-	return p.Called(cfg).Error(0)
-}
-
-func (p *registryMockProvider) Discover(ctx context.Context, cfg ProviderConfig) ([]Resource, error) {
-	args := p.Called(ctx, cfg)
+func (p *registryMockProvider) Prepare(cfg ProviderConfig) (Discovery, error) {
+	args := p.Called(cfg)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]Resource), args.Error(1)
+	return args.Get(0).(Discovery), args.Error(1)
 }
 
 // Registered mock providers must be retrievable by type and listed independently of registration order.

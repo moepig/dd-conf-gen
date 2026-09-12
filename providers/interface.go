@@ -2,17 +2,17 @@ package providers
 
 import "context"
 
-// Provider discovers and returns cloud resources
+// Prepares resource searches without external access or mutation of the supplied configuration.
 type Provider interface {
 	// Type returns the resource type handled by this provider
 	Type() string
 
-	// Discover retrieves resources based on the configuration
-	Discover(ctx context.Context, config ProviderConfig) ([]Resource, error)
-
-	// Checks configuration without network access or mutation of the supplied settings.
-	ValidateConfig(config ProviderConfig) error
+	// Returns a search with privately owned, validated settings, or an error for invalid configuration.
+	Prepare(config ProviderConfig) (Discovery, error)
 }
+
+// Executes a prepared search with cancellation and returns resources or a discovery error.
+type Discovery func(context.Context) ([]Resource, error)
 
 // ProviderConfig represents configuration for a provider
 type ProviderConfig struct {

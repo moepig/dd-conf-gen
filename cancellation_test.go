@@ -35,7 +35,7 @@ func cancellationConfig(t *testing.T) (string, string) {
 func TestCLITimeout(t *testing.T) {
 	t.Parallel()
 	app, p := newTestApplication(t)
-	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Prepare", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 		ctx := args.Get(0).(context.Context)
 		_, ok := ctx.Deadline()
@@ -56,7 +56,7 @@ func TestApplicationCancellationBeforeSave(t *testing.T) {
 	app, p := newTestApplication(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Prepare", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, mock.Anything).Run(func(mock.Arguments) { cancel() }).Return(nil, nil).Once()
 	path, output := cancellationConfig(t)
 	require.ErrorIs(t, app.run(ctx, path), context.Canceled)
@@ -69,7 +69,7 @@ func TestApplicationCancellationDuringFinalSave(t *testing.T) {
 	app, p := newTestApplication(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Prepare", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, mock.Anything).Return(nil, nil).Once()
 	path, destination := cancellationConfig(t)
 	writer := new(mockOutputWriter)
@@ -122,7 +122,7 @@ func TestSignalCLIProcess(t *testing.T) {
 		return
 	}
 	app, p := newTestApplication(t)
-	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Prepare", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 		fmt.Fprintln(os.Stdout, "ready")
 		<-args.Get(0).(context.Context).Done()

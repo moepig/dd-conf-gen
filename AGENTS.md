@@ -130,8 +130,8 @@ instances:
 1. `providers/<provider_name>/` ディレクトリを作成（例: `providers/rds/`）
 2. `provider.go` を作成し、`providers.Provider` インターフェースを実装
    - `Type() string`: リソース種別を返す（例: "rds_mysql"）
-   - `Discover(ctx, config) ([]providers.Resource, error)`: リソースを検索
-   - `ValidateConfig(config) error`: 設定をバリデーション
+   - `Prepare(config) (providers.Discovery, error)`: 外部アクセスなしで設定を検証し、型付き設定の独立したコピーを保持する検索関数を返す
+   - `providers.Discovery`: `context.Context` を受け取り、リソースのスライスとエラーを返す関数
 3. `provider_test.go` を作成し、モックを使用したユニットテストを実装
 4. `main.go` の `providers.Registry` に、リソース種別とプロバイダーの生成関数を登録
    ```go

@@ -44,6 +44,49 @@ func (m *MockResourceGroupsTaggingClient) GetResources(ctx context.Context, para
 	return args.Get(0).(*resourcegroupstaggingapi.GetResourcesOutput), args.Error(1)
 }
 
+// Prepares raw settings and executes the resulting search for discovery behavior tests.
+func discoverForTest(p *Provider, ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
+	discover, err := p.Prepare(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return discover(ctx)
+}
+
+// Mutates raw filters and provider clients after preparation and verifies repeated searches use the original snapshot.
+func TestPreparedDiscoveryOwnsSettings(t *testing.T) {
+	t.Parallel()
+	client := new(MockElastiCacheClient)
+	tagging := new(MockResourceGroupsTaggingClient)
+	client.Test(t)
+	tagging.Test(t)
+	p := NewProviderWithClients(client, tagging)
+	tags := map[string]interface{}{"env": "prod"}
+	cfg := providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{"tags": tags}}
+	discover, err := p.Prepare(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, discover)
+	assert.Empty(t, tagging.Calls)
+	assert.Empty(t, client.Calls)
+	tags["env"] = 123
+	cfg.Filters["unsupported"] = true
+	p.elasticacheClient = nil
+	p.taggingClient = nil
+	tagging.On("GetResources", mock.Anything, mock.MatchedBy(func(input *resourcegroupstaggingapi.GetResourcesInput) bool {
+		return len(input.TagFilters) == 1 && aws.ToString(input.TagFilters[0].Key) == "env" && len(input.TagFilters[0].Values) == 1 && input.TagFilters[0].Values[0] == "prod"
+	}), mock.Anything).Return(&resourcegroupstaggingapi.GetResourcesOutput{}, nil).Twice()
+	for range 2 {
+		resources, err := discover(context.Background())
+		require.NoError(t, err)
+		assert.Empty(t, resources)
+	}
+	tagging.AssertExpectations(t)
+	client.AssertExpectations(t)
+	invalid, err := p.Prepare(cfg)
+	require.Error(t, err)
+	assert.Nil(t, invalid)
+}
+
 func TestProvider_Type(t *testing.T) {
 	provider := NewProvider()
 	assert.Equal(t, "elasticache_redis", provider.Type())
@@ -82,7 +125,7 @@ func TestProvider_DiscoverClusterMode(t *testing.T) {
 			if filtered {
 				cfg.Filters = map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}}
 			}
-			result, err := p.Discover(context.Background(), cfg)
+			result, err := discoverForTest(p, context.Background(), cfg)
 			require.ErrorContains(t, err, "replication group cluster uses unsupported cluster mode")
 			assert.Nil(t, result)
 			tagging.AssertExpectations(t)
@@ -96,7 +139,7 @@ func TestProvider_DiscoverRejectsInvalidTagValues(t *testing.T) {
 	for _, value := range []interface{}{123, true, nil, []interface{}{"prod"}, map[string]interface{}{"env": "prod"}} {
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
 			provider := NewProviderWithClients(new(MockElastiCacheClient), new(MockResourceGroupsTaggingClient))
-			_, err := provider.Discover(context.Background(), providers.ProviderConfig{
+			_, err := discoverForTest(provider, context.Background(), providers.ProviderConfig{
 				Region:  "us-east-1",
 				Filters: map[string]interface{}{"tags": map[string]interface{}{"env": value}},
 			})
@@ -182,7 +225,7 @@ func TestProvider_DiscoverAWSConfigError(t *testing.T) {
 	t.Setenv("AWS_CONFIG_FILE", path)
 	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", path)
 	t.Setenv("AWS_PROFILE", "missing-profile")
-	result, err := NewProvider().Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1"})
+	result, err := discoverForTest(NewProvider(), context.Background(), providers.ProviderConfig{Region: "us-east-1"})
 	require.ErrorContains(t, err, "failed to load AWS config")
 	assert.Nil(t, result)
 }
@@ -198,7 +241,7 @@ func TestProvider_DiscoverWithInjectedClients(t *testing.T) {
 	client.On("GetResources", mock.Anything, mock.Anything, mock.Anything).
 		Return(&resourcegroupstaggingapi.GetResourcesOutput{}, nil).Once()
 	provider := NewProviderWithClients(new(MockElastiCacheClient), client)
-	_, err := provider.Discover(context.Background(), providers.ProviderConfig{
+	_, err := discoverForTest(provider, context.Background(), providers.ProviderConfig{
 		Region:  "us-east-1",
 		Filters: map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}},
 	})
@@ -278,7 +321,7 @@ func TestProvider_DiscoverWithoutTagFilters(t *testing.T) {
 					}},
 				}, nil).Once()
 			}
-			result, err := provider.Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1", Filters: filters})
+			result, err := discoverForTest(provider, context.Background(), providers.ProviderConfig{Region: "us-east-1", Filters: filters})
 			require.NoError(t, err)
 			require.Len(t, result, 2)
 			assert.Equal(t, "tagged.example.com", result[0].Host)
@@ -310,7 +353,7 @@ func TestProvider_DiscoverOnlyUntaggedResources(t *testing.T) {
 		}},
 	}, nil).Once()
 	provider := NewProviderWithClients(client, tagging)
-	result, err := provider.Discover(context.Background(), providers.ProviderConfig{Region: "us-east-1"})
+	result, err := discoverForTest(provider, context.Background(), providers.ProviderConfig{Region: "us-east-1"})
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	assert.Equal(t, "untagged.example.com", result[0].Host)
@@ -341,7 +384,7 @@ func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
 				taggingOutput = &resourcegroupstaggingapi.GetResourcesOutput{ResourceTagMappingList: []taggingtypes.ResourceTagMapping{mapping}}
 			}
 			tagging.On("GetResources", mock.Anything, mock.Anything, mock.Anything).Return(taggingOutput, nil).Once()
-			result, err := provider.Discover(context.Background(), providers.ProviderConfig{
+			result, err := discoverForTest(provider, context.Background(), providers.ProviderConfig{
 				Region:  "us-east-1",
 				Filters: map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}},
 			})
@@ -387,20 +430,20 @@ func TestProvider_DescribeReplicationGroupsPaginationFailure(t *testing.T) {
 	}
 }
 
-func TestProvider_ValidateConfig(t *testing.T) {
+func TestProvider_Prepare(t *testing.T) {
 	provider := NewProvider()
 
 	t.Run("valid config", func(t *testing.T) {
 		cfg := providers.ProviderConfig{
 			Region: "us-east-1",
 		}
-		err := provider.ValidateConfig(cfg)
+		_, err := provider.Prepare(cfg)
 		assert.NoError(t, err)
 	})
 
 	t.Run("missing region", func(t *testing.T) {
 		cfg := providers.ProviderConfig{}
-		err := provider.ValidateConfig(cfg)
+		_, err := provider.Prepare(cfg)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "region is required")
 	})
@@ -414,7 +457,7 @@ func TestProvider_ValidateConfig(t *testing.T) {
 				},
 			},
 		}
-		err := provider.ValidateConfig(cfg)
+		_, err := provider.Prepare(cfg)
 		assert.NoError(t, err)
 	})
 
@@ -425,7 +468,7 @@ func TestProvider_ValidateConfig(t *testing.T) {
 				"tags": "invalid",
 			},
 		}
-		err := provider.ValidateConfig(cfg)
+		_, err := provider.Prepare(cfg)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "filters.tags must be a map")
 	})
@@ -486,7 +529,7 @@ func TestProvider_Discover(t *testing.T) {
 			},
 		}
 
-		result, err := provider.Discover(ctx, cfg)
+		result, err := discoverForTest(provider, ctx, cfg)
 		require.NoError(t, err)
 		require.Len(t, result, 1)
 
@@ -525,7 +568,7 @@ func TestProvider_Discover(t *testing.T) {
 			},
 		}
 
-		result, err := provider.Discover(ctx, cfg)
+		result, err := discoverForTest(provider, ctx, cfg)
 		require.NoError(t, err)
 		assert.Len(t, result, 0)
 
@@ -596,7 +639,7 @@ func TestProvider_Discover(t *testing.T) {
 			},
 		}
 
-		result, err := provider.Discover(ctx, cfg)
+		result, err := discoverForTest(provider, ctx, cfg)
 		require.NoError(t, err)
 		require.Len(t, result, 2)
 
@@ -660,7 +703,7 @@ func TestProvider_Discover(t *testing.T) {
 			Region: "ap-northeast-1",
 		}
 
-		result, err := provider.Discover(ctx, cfg)
+		result, err := discoverForTest(provider, ctx, cfg)
 		require.NoError(t, err)
 		require.Len(t, result, 2, "Should return both primary and replica")
 
@@ -685,7 +728,7 @@ func TestProvider_Discover(t *testing.T) {
 		provider := NewProvider()
 		cfg := providers.ProviderConfig{}
 
-		_, err := provider.Discover(context.Background(), cfg)
+		_, err := discoverForTest(provider, context.Background(), cfg)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "region is required")
 	})
@@ -708,7 +751,7 @@ func TestProvider_Discover(t *testing.T) {
 			},
 		}
 
-		_, err := provider.Discover(ctx, cfg)
+		_, err := discoverForTest(provider, ctx, cfg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to get resources by tags")
 
@@ -737,7 +780,7 @@ func TestProvider_Discover(t *testing.T) {
 			Region: "ap-northeast-1",
 		}
 
-		_, err := provider.Discover(ctx, cfg)
+		_, err := discoverForTest(provider, ctx, cfg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to describe replication group")
 

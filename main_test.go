@@ -24,8 +24,11 @@ type mockProvider struct {
 
 func (p *mockProvider) Type() string { return "elasticache_redis" }
 
-func (p *mockProvider) ValidateConfig(cfg providers.ProviderConfig) error {
-	return p.Called(cfg).Error(0)
+func (p *mockProvider) Prepare(cfg providers.ProviderConfig) (providers.Discovery, error) {
+	if err := p.Called(cfg).Error(0); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) ([]providers.Resource, error) { return p.Discover(ctx, cfg) }, nil
 }
 
 func (p *mockProvider) Discover(ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
@@ -66,7 +69,7 @@ func TestCLIDebugDoesNotDumpSensitiveData(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "redis.tmpl"), []byte(`password: DUMMY_TEMPLATE_SECRET
 {{range .Resources}}{{index .Metadata "password"}}{{end}}`), 0600))
-	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Prepare", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, mock.Anything).Return([]providers.Resource{{Metadata: map[string]interface{}{"password": "DUMMY_RESOURCE_SECRET"}}}, nil).Once()
 	path := writeRunConfig(t, dir, config.GenConfig{
 		Resources: []config.ResourceConfig{{Name: "redis", Type: p.Type(), Region: "us-east-1", Filters: map[string]interface{}{"tags": map[string]interface{}{"secret": "DUMMY_FILTER_SECRET"}}}},
@@ -96,8 +99,8 @@ func TestRunGeneratesOutputs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	filters := map[string]interface{}{"tags": map[string]interface{}{"env": "prod"}}
-	eastValidation := p.On("ValidateConfig", providers.ProviderConfig{Region: "us-east-1", Filters: filters}).Return(nil).Once()
-	tokyoValidation := p.On("ValidateConfig", providers.ProviderConfig{Region: "ap-northeast-1", Filters: map[string]interface{}{}}).Return(nil).Once()
+	eastValidation := p.On("Prepare", providers.ProviderConfig{Region: "us-east-1", Filters: filters}).Return(nil).Once()
+	tokyoValidation := p.On("Prepare", providers.ProviderConfig{Region: "ap-northeast-1", Filters: map[string]interface{}{}}).Return(nil).Once()
 	p.On("Discover", ctx, providers.ProviderConfig{Region: "us-east-1", Filters: filters}).Return([]providers.Resource{{
 		Host: "east.example.com", Port: 6379, Tags: map[string]string{"env": "prod"}, Metadata: map[string]interface{}{"ClusterName": "east"},
 	}}, nil).Once().NotBefore(eastValidation, tokyoValidation)
@@ -173,7 +176,7 @@ func TestRunFailures(t *testing.T) {
 				expectedError = "invalid output file"
 			}
 			if name != "invalid config" && name != "unknown provider" && name != "duplicate output" && name != "output directory error" {
-				p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+				p.On("Prepare", mock.Anything).Return(nil).Once()
 				if name == "discovery error" || name == "execution error" {
 					p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return([]providers.Resource{{Host: "redis.example.com"}}, discoverErr).Once()
 				}
@@ -194,7 +197,7 @@ func TestRunFailures(t *testing.T) {
 func TestRunEmptyResources(t *testing.T) {
 	t.Parallel()
 	app, p := newTestApplication(t)
-	p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+	p.On("Prepare", mock.Anything).Return(nil).Once()
 	p.On("Discover", mock.Anything, providers.ProviderConfig{Region: "us-east-1", Filters: map[string]interface{}{}}).Return(nil, nil).Once()
 	dir := t.TempDir()
 	output := filepath.Join(dir, "output.yaml")
@@ -260,7 +263,7 @@ func TestCLIGenerationLogging(t *testing.T) {
 		t.Run(level, func(t *testing.T) {
 			t.Parallel()
 			app, p := newTestApplication(t)
-			p.On("ValidateConfig", mock.Anything).Return(nil).Once()
+			p.On("Prepare", mock.Anything).Return(nil).Once()
 			p.On("Discover", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 				logging.FromContext(args.Get(0).(context.Context)).Debug("provider diagnostic")
 			}).Return(nil, nil).Once()

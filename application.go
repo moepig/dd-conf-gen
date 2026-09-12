@@ -78,10 +78,10 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		}
 		logging.FromContext(ctx).Info("Discovering resource",
 			"name", request.name,
-			"type", request.provider.Type(),
-			"region", request.config.Region)
+			"type", request.kind,
+			"region", request.region)
 
-		discoveredResources, err := request.provider.Discover(ctx, request.config)
+		discoveredResources, err := request.discover(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to discover resources for '%s': %w", request.name, err)
 		}
@@ -128,8 +128,9 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 
 type resourceRequest struct {
 	name     string
-	provider providers.Provider
-	config   providers.ProviderConfig
+	kind     string
+	region   string
+	discover providers.Discovery
 }
 
 // Resolves and validates every resource definition before any discovery begins.
@@ -141,10 +142,14 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 			return nil, fmt.Errorf("failed to get provider for resource '%s': %w", resource.Name, err)
 		}
 		cfg := providers.ProviderConfig{Region: resource.Region, Filters: resource.Filters}
-		if err := provider.ValidateConfig(cfg); err != nil {
+		discover, err := provider.Prepare(cfg)
+		if err != nil {
 			return nil, fmt.Errorf("invalid provider config for resource '%s': %w", resource.Name, err)
 		}
-		requests = append(requests, resourceRequest{name: resource.Name, provider: provider, config: cfg})
+		if discover == nil {
+			return nil, fmt.Errorf("provider returned no prepared discovery for resource '%s'", resource.Name)
+		}
+		requests = append(requests, resourceRequest{name: resource.Name, kind: resource.Type, region: resource.Region, discover: discover})
 	}
 	return requests, nil
 }
