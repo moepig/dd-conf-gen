@@ -13,10 +13,12 @@ type FileWriter struct{}
 // Holds a validated absolute destination; its zero value cannot be written.
 type Destination struct{ path string }
 
-// Returns the resolved destination path used for duplicate detection and saving.
+// Returns the resolved absolute destination path, or an empty string for the zero value.
 func (d Destination) Path() string { return d.path }
 
-// Resolves and validates a destination without creating files or directories.
+// Resolves and validates path without creating files or directories.
+//
+// Returns a destination bound to the resolved absolute path, or a zero value and an error for path resolution or an existing non-regular file.
 func (FileWriter) Prepare(path string) (Destination, error) {
 	target, _, err := inspectDestination(path)
 	if err != nil {
@@ -25,8 +27,9 @@ func (FileWriter) Prepare(path string) (Destination, error) {
 	return Destination{path: target}, nil
 }
 
-// Replaces a prepared destination, rejecting changed symlink targets and rechecking permissions and file types.
-// Failures before the rename leave the existing destination unchanged.
+// Replaces destination with content.
+//
+// Returns an error if the prepared path resolves elsewhere, its file type is invalid, or directory creation or writing fails; otherwise returns nil. Failures before replacement leave the existing file unchanged.
 func (FileWriter) Write(destination Destination, content []byte) error {
 	target, mode, err := inspectDestination(destination.path)
 	if err != nil {
@@ -42,7 +45,9 @@ func (FileWriter) Write(destination Destination, content []byte) error {
 	return writeTemporaryFile(target, content, mode)
 }
 
-// Resolves the destination and existing permissions, rejecting unusable destination types.
+// Resolves path and inspects the destination file.
+//
+// Returns the absolute path and existing permission bits, with nil permissions for a missing file. Returns an error for path resolution, inspection failure, or an existing non-regular file.
 func inspectDestination(path string) (string, *os.FileMode, error) {
 	target, err := ResolvePath(path)
 	if err != nil {
@@ -61,7 +66,9 @@ func inspectDestination(path string) (string, *os.FileMode, error) {
 	return target, mode, nil
 }
 
-// Writes and replaces a destination using a temporary file in the same directory.
+// Writes content to a temporary file beside target and renames it to target.
+//
+// Uses the permission bits in mode when non-nil, otherwise 0644 subject to umask. Returns the first creation, write, permission, sync, close, or rename error, or nil on success.
 func writeTemporaryFile(target string, content []byte, mode *os.FileMode) error {
 	dir := filepath.Dir(target)
 	createMode := os.FileMode(0644)

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Writes a valid configuration whose output must remain absent if discovery is cancelled.
+// Creates a configuration and template in a temporary directory owned by t. Returns the configuration path and the absent output path, failing the test on write errors.
 func cancellationConfig(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -31,7 +31,7 @@ func cancellationConfig(t *testing.T) (string, string) {
 	return path, output
 }
 
-// A waiting mock provider must receive the CLI deadline, and no output may be saved after it expires.
+// Waits for the CLI deadline in mocked discovery and requires a failure exit code, a deadline diagnostic, and no output file.
 func TestCLITimeout(t *testing.T) {
 	t.Parallel()
 	app, p := newTestApplication(t)
@@ -50,7 +50,7 @@ func TestCLITimeout(t *testing.T) {
 	assert.NoFileExists(t, output)
 }
 
-// Cancellation must prevent saving even if a provider returns a successful result after cancellation.
+// Cancels during mocked discovery that returns success and requires a cancellation error with no output file.
 func TestApplicationCancellationBeforeSave(t *testing.T) {
 	t.Parallel()
 	app, p := newTestApplication(t)
@@ -116,7 +116,7 @@ func TestCLISignals(t *testing.T) {
 	}
 }
 
-// Runs signal-aware CLI execution only in the child process used by TestCLISignals.
+// Runs the CLI in a subprocess selected by an environment variable, with mocked discovery waiting for cancellation and returning the cancellation error.
 func TestSignalCLIProcess(t *testing.T) {
 	if os.Getenv("DD_CONF_GEN_SIGNAL_TEST") != "1" {
 		return

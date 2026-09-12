@@ -1,9 +1,9 @@
 package providers
 
-// Resource represents a discovered cloud resource
+// Holds a discovered cloud resource endpoint, source tags, and provider-specific metadata.
 type Resource struct {
-	Host     string                 // Hostname or endpoint
-	Port     int                    // Port number
-	Tags     map[string]string      // Mapped Datadog tags
-	Metadata map[string]interface{} // Type-specific additional data
+	Host     string                 // Hostname or endpoint address.
+	Port     int                    // Endpoint port number.
+	Tags     map[string]string      // Source resource tags with their original names and values.
+	Metadata map[string]interface{} // Provider-specific additional data.
 }

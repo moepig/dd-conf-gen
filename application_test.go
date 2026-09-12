@@ -14,8 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Holds mocked destination preparation and write calls and errors.
 type mockOutputWriter struct{ mock.Mock }
 
+// Records path and returns the configured error, or validates path and returns its destination without writing.
 func (w *mockOutputWriter) Prepare(path string) (output.Destination, error) {
 	if err := w.Called(path).Error(0); err != nil {
 		return output.Destination{}, err
@@ -23,11 +25,12 @@ func (w *mockOutputWriter) Prepare(path string) (output.Destination, error) {
 	return (output.FileWriter{}).Prepare(path)
 }
 
+// Records destination.Path() and content and returns the configured error.
 func (w *mockOutputWriter) Write(destination output.Destination, content []byte) error {
 	return w.Called(destination.Path(), content).Error(0)
 }
 
-// A later invalid or unregistered resource must fail before any discovery or save occurs.
+// Supplies a later invalid or unregistered resource with mocked providers and output writing; requires an error before discovery or saving.
 func TestApplicationPreflight(t *testing.T) {
 	t.Parallel()
 	for _, unknown := range []bool{false, true} {
@@ -67,7 +70,7 @@ func TestApplicationPreflight(t *testing.T) {
 	}
 }
 
-// A later rendering failure must prevent every write; a save failure must be returned and stop subsequent writes.
+// Supplies a later malformed template or a mocked save error; requires no writes for the template error and no subsequent writes for the save error.
 func TestApplicationOutputFailures(t *testing.T) {
 	t.Parallel()
 	for _, renderFailure := range []bool{true, false} {

@@ -12,27 +12,35 @@ import (
 	"github.com/moepig/dd-conf-gen/renderer"
 )
 
+// Holds the provider registry and output writer for a generation run.
 type application struct {
 	registry *providers.Registry
 	writer   outputWriter
 }
 
-// Saves one output, reporting failures to the caller.
+// Prepares destinations and saves output contents. Failures are returned as errors.
 type outputWriter interface {
+	// Validates path without writing and returns a destination, or an error for an invalid path.
 	Prepare(path string) (output.Destination, error)
+
+	// Saves content at destination and returns an error on failure.
 	Write(destination output.Destination, content []byte) error
 }
 
+// Holds a prepared destination and its complete rendered contents.
 type generatedOutput struct {
 	destination output.Destination
 	content     []byte
 }
 
-// Generates every output, then saves files in configuration order, stopping at the first save failure.
+// Generates and saves the outputs defined by configPath, using ctx for cancellation and logging.
+//
+// Returns the first generation, save, or cancellation error, or nil on success. Outputs are saved in configuration order; completed saves are not rolled back.
 func (app *application) run(ctx context.Context, configPath string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// Complete all generation before the first save to avoid writes on discovery or rendering errors.
 	outputs, err := app.generate(ctx, configPath)
 	if err != nil {
 		return err
@@ -53,9 +61,10 @@ func (app *application) run(ctx context.Context, configPath string) error {
 	return nil
 }
 
-// Generates all outputs before any destination is changed.
+// Builds output contents and destinations from configPath, using ctx for cancellation and logging.
+//
+// Returns all generated outputs in configuration order without saving files. Returns nil outputs and an error if loading, preparation, discovery, rendering, or cancellation fails.
 func (app *application) generate(ctx context.Context, configPath string) ([]generatedOutput, error) {
-	// Load generation configuration
 	logging.FromContext(ctx).Info("Loading generation configuration", "config_path", configPath)
 	genCfg, err := config.LoadGenConfigContext(ctx, configPath)
 	if err != nil {
@@ -70,7 +79,6 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		return nil, err
 	}
 
-	// Discover resources for each resource config
 	logging.FromContext(ctx).Info("Discovering resources")
 	resourceMap := make(map[string][]providers.Resource)
 	for _, request := range requests {
@@ -93,7 +101,6 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 			"count", len(discoveredResources))
 	}
 
-	// Render templates and write output files
 	logging.FromContext(ctx).Info("Generating output files")
 	var outputs []generatedOutput
 	for _, prepared := range preparedOutputs {
@@ -103,18 +110,15 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		}
 		logging.FromContext(ctx).Info("Rendering template", "output_file", path)
 
-		// Get resources for this output
 		discoveredResources, ok := resourceMap[prepared.resourceName]
 		if !ok {
 			return nil, fmt.Errorf("resource '%s' not found for output '%s'", prepared.resourceName, path)
 		}
 
-		// Prepare template data
 		templateData := renderer.TemplateData{
 			Resources: discoveredResources,
 		}
 
-		// Render template
 		output, err := prepared.template.Render(ctx, templateData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", path, err)
@@ -127,6 +131,7 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 	return outputs, nil
 }
 
+// Holds resource identity, region, and a prepared search.
 type resourceRequest struct {
 	name     string
 	kind     string
@@ -134,7 +139,9 @@ type resourceRequest struct {
 	discover providers.Discovery
 }
 
-// Resolves and validates every resource definition before any discovery begins.
+// Prepares searches for the supplied resource definitions without executing them.
+//
+// Returns requests in definition order, or nil and an error for an unavailable provider, invalid settings, or a nil search.
 func (app *application) prepareResources(resources []config.ResourceConfig) ([]resourceRequest, error) {
 	requests := make([]resourceRequest, 0, len(resources))
 	for _, resource := range resources {
@@ -155,13 +162,16 @@ func (app *application) prepareResources(resources []config.ResourceConfig) ([]r
 	return requests, nil
 }
 
+// Holds a resource reference, validated destination, and compiled template.
 type preparedOutput struct {
 	resourceName string
 	destination  output.Destination
 	template     *renderer.CompiledTemplate
 }
 
-// Parses all templates and validates destinations before resource discovery, without writing outputs.
+// Prepares templates and destinations for outputs without writing files.
+//
+// Resolves relative template paths against configDir and uses ctx for cancellation and logging. Returns prepared outputs in definition order, or nil and an error for cancellation, template errors, invalid destinations, or duplicate resolved paths.
 func (app *application) prepareOutputs(ctx context.Context, outputs []config.OutputConfig, configDir string) ([]preparedOutput, error) {
 	prepared := make([]preparedOutput, 0, len(outputs))
 	for _, out := range outputs {

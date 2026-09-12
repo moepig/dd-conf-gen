@@ -1,12 +1,12 @@
 package config
 
-// GenConfig represents the entire generation configuration file
+// Holds resource search definitions and ordered output definitions.
 type GenConfig struct {
 	Resources []ResourceConfig `yaml:"resources"`
 	Outputs   []OutputConfig   `yaml:"outputs"`
 }
 
-// ResourceConfig represents a resource definition
+// Holds a named resource search definition with its type, region, and provider-specific filters.
 type ResourceConfig struct {
 	Name    string                 `yaml:"name"`
 	Type    string                 `yaml:"type"`
@@ -14,14 +14,14 @@ type ResourceConfig struct {
 	Filters map[string]interface{} `yaml:"filters"`
 }
 
-// OutputConfig represents an output definition
+// Holds a template path, output file path, and resource selection.
 type OutputConfig struct {
 	Template   string     `yaml:"template"`
 	OutputFile string     `yaml:"output_file"`
 	Data       OutputData `yaml:"data"`
 }
 
-// OutputData represents data passed to templates
+// Identifies the resource definition selected for an output.
 type OutputData struct {
 	ResourceName string `yaml:"resource_name"`
 }

@@ -18,38 +18,42 @@ import (
 
 const providerType = "elasticache_redis"
 
-// Provider implements the providers.Provider interface for ElastiCache Redis
+// Discovers ElastiCache Redis nodes using optional API client references.
 type Provider struct {
 	elasticacheClient ElastiCacheAPI
 	taggingClient     ResourceGroupsTaggingAPI
 }
 
-// ElastiCacheAPI defines the ElastiCache API interface
+// Provides replication group queries.
 type ElastiCacheAPI interface {
+	// Queries with params and optFns using ctx for cancellation, returning a response page or an API error.
 	DescribeReplicationGroups(ctx context.Context, params *elasticache.DescribeReplicationGroupsInput, optFns ...func(*elasticache.Options)) (*elasticache.DescribeReplicationGroupsOutput, error)
 }
 
-// ResourceGroupsTaggingAPI defines the Resource Groups Tagging API interface
+// Provides resource tag queries.
 type ResourceGroupsTaggingAPI interface {
+	// Queries with params and optFns using ctx for cancellation, returning a resource tag page or an API error.
 	GetResources(ctx context.Context, params *resourcegroupstaggingapi.GetResourcesInput, optFns ...func(*resourcegroupstaggingapi.Options)) (*resourcegroupstaggingapi.GetResourcesOutput, error)
 }
 
-// NewProvider creates a new ElastiCache provider
+// Returns an ElastiCache Redis provider with no API clients configured.
 func NewProvider() *Provider {
 	return &Provider{}
 }
 
-// Creates a provider with injected API clients. Missing clients are created for the requested discovery region.
+// Returns an ElastiCache Redis provider retaining elasticacheClient and taggingClient. Either client reference may be nil.
 func NewProviderWithClients(elasticacheClient ElastiCacheAPI, taggingClient ResourceGroupsTaggingAPI) *Provider {
 	return &Provider{elasticacheClient: elasticacheClient, taggingClient: taggingClient}
 }
 
-// Type returns the resource type handled by this provider
+// Returns the resource type "elasticache_redis".
 func (p *Provider) Type() string {
 	return providerType
 }
 
-// Retrieves Redis nodes using validated settings, returning no partial result on API errors.
+// Discovers Redis nodes using validated settings and ctx for cancellation and logging.
+//
+// Returns nodes matching settings.tags in settings.region, or all groups when tags are empty. Returns nil and an error on cancellation, client configuration failure, invalid responses, unsupported cluster mode, or API failure.
 func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]providers.Resource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -62,11 +66,9 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 	}
 	p = clientProvider
 
-	// Extract tag filters from config
 	tags := settings.tags
 	logging.FromContext(ctx).Debug("Extracted tag filters", "tag_count", len(tags))
 
-	// Get replication groups by tags
 	resourceTagMappings, err := p.getReplicationGroupsByTags(ctx, tags)
 	if err != nil {
 		return nil, err
@@ -124,7 +126,6 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 			"replication_group_id", id,
 			"node_groups_count", len(groups[0].NodeGroups))
 
-		// Extract nodes from replication groups
 		nodes := extractNodesFromReplicationGroups(ctx, groups, id, tagsFromMapping(mapping))
 		logging.FromContext(ctx).Debug("Extracted nodes from replication group",
 			"replication_group_id", id,
@@ -136,7 +137,9 @@ func (p *Provider) discover(ctx context.Context, settings discoveryConfig) ([]pr
 	return result, nil
 }
 
-// Retrieves all replication group pages, returning no partial result on failure.
+// Retrieves replication groups across pages using non-nil input and ctx for API cancellation.
+//
+// Returns all groups without modifying input, or nil and an error for API failure, a nil response, cluster mode, or repeated pagination markers.
 func (p *Provider) describeReplicationGroups(ctx context.Context, input *elasticache.DescribeReplicationGroupsInput) ([]elasticachetypes.ReplicationGroup, error) {
 	var result []elasticachetypes.ReplicationGroup
 	seenMarkers := make(map[string]bool)
@@ -168,7 +171,9 @@ func (p *Provider) describeReplicationGroups(ctx context.Context, input *elastic
 	}
 }
 
-// Returns clients for the requested region while preserving injected clients.
+// Returns a copy of the provider with missing clients initialized for region using ctx.
+//
+// Existing client references are retained and the receiver is unchanged. Returns nil and an error if AWS configuration cannot be loaded.
 func (p *Provider) forRegion(ctx context.Context, region string) (*Provider, error) {
 	local := *p
 	if local.taggingClient != nil && local.elasticacheClient != nil {
@@ -187,9 +192,10 @@ func (p *Provider) forRegion(ctx context.Context, region string) (*Provider, err
 	return &local, nil
 }
 
-// getReplicationGroupsByTags retrieves replication groups filtered by tags
+// Retrieves replication group tag mappings using tags as filters and ctx for cancellation and logging.
+//
+// Returns mappings from all pages, or nil and an error for an uninitialized tagging client, API failure, a nil response, or repeated pagination tokens. Empty tags apply no tag filters.
 func (p *Provider) getReplicationGroupsByTags(ctx context.Context, tags map[string]string) ([]taggingtypes.ResourceTagMapping, error) {
-	// Ensure tagging client is initialized
 	if p.taggingClient == nil {
 		return nil, fmt.Errorf("tagging client is not initialized")
 	}
@@ -230,7 +236,7 @@ func (p *Provider) getReplicationGroupsByTags(ctx context.Context, tags map[stri
 	return result, nil
 }
 
-// buildTagFilters converts a map of tags to AWS TagFilter array
+// Returns one AWS tag filter per key-value pair in tags, with a single value per filter and unspecified order. Empty tags produce an empty slice.
 func buildTagFilters(tags map[string]string) []taggingtypes.TagFilter {
 	tagFilters := []taggingtypes.TagFilter{}
 	for key, value := range tags {
@@ -242,7 +248,9 @@ func buildTagFilters(tags map[string]string) []taggingtypes.TagFilter {
 	return tagFilters
 }
 
-// buildARNToTagsMap builds a map from ARN to tags
+// Indexes resourceTagMappings by nonempty ARN and returns independently owned tag maps.
+//
+// Mappings without an ARN and tag pairs missing a key or value are omitted. Later mappings replace earlier mappings with the same ARN.
 func buildARNToTagsMap(resourceTagMappings []taggingtypes.ResourceTagMapping) map[string]map[string]string {
 	arnToTags := make(map[string]map[string]string)
 	for _, mapping := range resourceTagMappings {
@@ -254,7 +262,7 @@ func buildARNToTagsMap(resourceTagMappings []taggingtypes.ResourceTagMapping) ma
 	return arnToTags
 }
 
-// Copies complete tag pairs from a resource mapping into an independently owned map.
+// Returns an independently owned map of complete tag pairs from mapping. Pairs with a nil key or value are omitted; later values replace earlier values for duplicate keys.
 func tagsFromMapping(mapping taggingtypes.ResourceTagMapping) map[string]string {
 	tags := make(map[string]string, len(mapping.Tags))
 	for _, tag := range mapping.Tags {
@@ -265,7 +273,9 @@ func tagsFromMapping(mapping taggingtypes.ResourceTagMapping) map[string]string 
 	return tags
 }
 
-// extractNodesFromReplicationGroups extracts all nodes from replication groups
+// Converts replicationGroups into node resources, using ctx for logging.
+//
+// Returns nodes with nonempty read addresses and positive ports, preserving group and member order. Each node receives an independent copy of tags and metadata containing clusterName, its shard ID, primary status, and cache cluster ID; incomplete endpoints are omitted.
 func extractNodesFromReplicationGroups(ctx context.Context, replicationGroups []elasticachetypes.ReplicationGroup, clusterName string, tags map[string]string) []providers.Resource {
 	var result []providers.Resource
 
@@ -281,7 +291,6 @@ func extractNodesFromReplicationGroups(ctx context.Context, replicationGroups []
 				"members_count", len(ng.NodeGroupMembers))
 
 			for _, member := range ng.NodeGroupMembers {
-				// Get all node endpoints (both primary and replica)
 				if member.ReadEndpoint != nil && aws.ToString(member.ReadEndpoint.Address) != "" && aws.ToInt32(member.ReadEndpoint.Port) > 0 {
 					isPrimary := aws.ToString(member.CurrentRole) == "primary"
 

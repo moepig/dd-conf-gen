@@ -7,12 +7,15 @@ import (
 	"github.com/moepig/dd-conf-gen/providers"
 )
 
+// Holds a validated region and an independently owned map of tag filters.
 type discoveryConfig struct {
 	region string
 	tags   map[string]string
 }
 
-// Validates and snapshots settings and clients without external access, returning a prepared search or an error.
+// Prepares a resource search from cfg without external access or mutation of cfg.
+//
+// Returns a search that retains independently owned settings and the current client references, or nil and a configuration error. The search accepts a context for cancellation and logging and returns resources or a discovery error.
 func (p *Provider) Prepare(cfg providers.ProviderConfig) (providers.Discovery, error) {
 	settings, err := parseConfig(cfg)
 	if err != nil {
@@ -24,8 +27,9 @@ func (p *Provider) Prepare(cfg providers.ProviderConfig) (providers.Discovery, e
 	}, nil
 }
 
-// Converts raw provider settings into independently owned, typed discovery settings.
-// Missing regions, unsupported filters, and non-string tag values return an error.
+// Converts cfg into independently owned, typed discovery settings.
+//
+// Returns settings, or a zero value and an error for a missing region, unsupported filters, a tags value other than map[string]interface{}, or non-string tag values.
 func parseConfig(cfg providers.ProviderConfig) (discoveryConfig, error) {
 	if cfg.Region == "" {
 		return discoveryConfig{}, fmt.Errorf("region is required")

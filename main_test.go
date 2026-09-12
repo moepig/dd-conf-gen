@@ -18,12 +18,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Holds mocked preparation and discovery calls and results.
 type mockProvider struct {
 	mock.Mock
 }
 
+// Returns the mock resource type "elasticache_redis".
 func (p *mockProvider) Type() string { return "elasticache_redis" }
 
+// Records cfg and returns the configured error, or a search forwarding its context and cfg to mocked discovery.
 func (p *mockProvider) Prepare(cfg providers.ProviderConfig) (providers.Discovery, error) {
 	if err := p.Called(cfg).Error(0); err != nil {
 		return nil, err
@@ -31,6 +34,7 @@ func (p *mockProvider) Prepare(cfg providers.ProviderConfig) (providers.Discover
 	return func(ctx context.Context) ([]providers.Resource, error) { return p.Discover(ctx, cfg) }, nil
 }
 
+// Records ctx and cfg and returns the configured resource slice and error.
 func (p *mockProvider) Discover(ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
 	args := p.Called(ctx, cfg)
 	if args.Get(0) == nil {
@@ -39,7 +43,7 @@ func (p *mockProvider) Discover(ctx context.Context, cfg providers.ProviderConfi
 	return args.Get(0).([]providers.Resource), args.Error(1)
 }
 
-// Creates an application with an independent registry and a mock provider.
+// Returns an application with an independent registry and its mock provider. Uses t for mock failures and expectation checks at cleanup.
 func newTestApplication(t *testing.T) (*application, *mockProvider) {
 	t.Helper()
 	p := new(mockProvider)
@@ -51,7 +55,7 @@ func newTestApplication(t *testing.T) (*application, *mockProvider) {
 	return &application{registry: registry, writer: output.FileWriter{}}, p
 }
 
-// Writes a generation configuration in the test directory and returns its path.
+// Writes cfg as YAML in dir and returns its path. Uses t to fail the test on serialization or write errors.
 func writeRunConfig(t *testing.T, dir string, cfg config.GenConfig) string {
 	t.Helper()
 	data, err := yaml.Marshal(cfg)
@@ -128,7 +132,7 @@ func TestRunGeneratesOutputs(t *testing.T) {
 	}
 }
 
-// Discovery and rendering errors must leave an existing output intact; filesystem errors must be returned.
+// Runs invalid configurations, failing mocked discovery, and invalid template or output paths; requires the corresponding errors and unchanged existing output.
 func TestRunFailures(t *testing.T) {
 	for _, name := range []string{"invalid config", "duplicate output", "unknown provider", "discovery error", "missing template", "invalid template", "execution error", "output directory error", "output file error"} {
 		t.Run(name, func(t *testing.T) {
@@ -192,7 +196,7 @@ func TestRunFailures(t *testing.T) {
 	}
 }
 
-// An empty discovery result must still render the template and replace obsolete output.
+// Returns no resources from mocked discovery and verifies that rendering replaces obsolete output with an empty instance list.
 func TestRunEmptyResources(t *testing.T) {
 	t.Parallel()
 	app, p := newTestApplication(t)

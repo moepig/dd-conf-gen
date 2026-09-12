@@ -11,12 +11,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadGenConfig loads and parses a generation configuration file
+// Reads and validates the generation configuration at path.
+//
+// Returns the configuration, or nil and an error for file access, YAML decoding, unknown fields, multiple documents, or invalid definitions.
 func LoadGenConfig(path string) (*GenConfig, error) {
 	return LoadGenConfigContext(context.Background(), path)
 }
 
-// Reads and validates a configuration file, sending diagnostics to the context logger.
+// Reads and validates the generation configuration at path, using ctx for logging.
+//
+// Returns the configuration, or nil and an error for file access, YAML decoding, unknown fields, multiple documents, or invalid definitions.
 func LoadGenConfigContext(ctx context.Context, path string) (*GenConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -46,7 +50,9 @@ func LoadGenConfigContext(ctx context.Context, path string) (*GenConfig, error) 
 	return &cfg, nil
 }
 
-// validateGenConfig validates the generation configuration
+// Validates required fields and resource references in non-nil cfg.
+//
+// Returns an error for empty resource or output lists, missing required fields, duplicate resource names, or unresolved resource references; otherwise returns nil.
 func validateGenConfig(cfg *GenConfig) error {
 	if len(cfg.Resources) == 0 {
 		return fmt.Errorf("at least one resource must be defined")
@@ -56,7 +62,6 @@ func validateGenConfig(cfg *GenConfig) error {
 		return fmt.Errorf("at least one output must be defined")
 	}
 
-	// Validate resources
 	resourceNames := make(map[string]bool)
 	for i, res := range cfg.Resources {
 		if res.Name == "" {
@@ -74,7 +79,6 @@ func validateGenConfig(cfg *GenConfig) error {
 		resourceNames[res.Name] = true
 	}
 
-	// Validate outputs
 	for i, out := range cfg.Outputs {
 		if out.Template == "" {
 			return fmt.Errorf("output[%d]: template is required", i)
@@ -85,7 +89,7 @@ func validateGenConfig(cfg *GenConfig) error {
 		if out.Data.ResourceName == "" {
 			return fmt.Errorf("output[%d]: data.resource_name is required", i)
 		}
-		// Check resource reference
+
 		if !resourceNames[out.Data.ResourceName] {
 			return fmt.Errorf("output[%d]: resource_name '%s' not found in resources", i, out.Data.ResourceName)
 		}

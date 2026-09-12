@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Prepares and saves a path for tests covering the complete file-output operation.
+// Prepares path and saves content, returning a preparation or write error, or nil on success.
 func writeForTest(path string, content []byte) error {
 	w := FileWriter{}
 	destination, err := w.Prepare(path)
@@ -52,7 +52,7 @@ func TestFileWriter(t *testing.T) {
 	}
 }
 
-// Writing through a symlink must update its target while retaining the symlink itself.
+// Writes through a real symlink and verifies updated target contents and preservation of the symlink.
 func TestFileWriterSymlink(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -69,7 +69,7 @@ func TestFileWriterSymlink(t *testing.T) {
 	assert.Equal(t, "target.yaml", linkTarget)
 }
 
-// Invalid destinations must fail without replacing a directory, parent file, or dangling symlink.
+// Writes to a directory, a path below a regular file, and a dangling symlink; requires errors, preservation of existing paths, and no temporary files.
 func TestFileWriterInvalidDestination(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -90,7 +90,7 @@ func TestFileWriterInvalidDestination(t *testing.T) {
 	assert.Empty(t, files)
 }
 
-// Destination preflight must reject invalid paths and leave missing directories uncreated.
+// Prepares missing and invalid filesystem paths; requires a resolved destination without directory creation for missing paths and errors for invalid paths.
 func TestFileWriterPrepare(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

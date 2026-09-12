@@ -18,11 +18,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockElastiCacheClient is a mock implementation of ElastiCacheAPI
+// Holds mocked replication group API calls and results.
 type MockElastiCacheClient struct {
 	mock.Mock
 }
 
+// Records ctx, params, and optFns and returns the configured replication group response and error.
 func (m *MockElastiCacheClient) DescribeReplicationGroups(ctx context.Context, params *elasticache.DescribeReplicationGroupsInput, optFns ...func(*elasticache.Options)) (*elasticache.DescribeReplicationGroupsOutput, error) {
 	args := m.Called(ctx, params, optFns)
 	if args.Get(0) == nil {
@@ -31,11 +32,12 @@ func (m *MockElastiCacheClient) DescribeReplicationGroups(ctx context.Context, p
 	return args.Get(0).(*elasticache.DescribeReplicationGroupsOutput), args.Error(1)
 }
 
-// MockResourceGroupsTaggingClient is a mock implementation of ResourceGroupsTaggingAPI
+// Holds mocked resource tag API calls and results.
 type MockResourceGroupsTaggingClient struct {
 	mock.Mock
 }
 
+// Records ctx, params, and optFns and returns the configured resource tag response and error.
 func (m *MockResourceGroupsTaggingClient) GetResources(ctx context.Context, params *resourcegroupstaggingapi.GetResourcesInput, optFns ...func(*resourcegroupstaggingapi.Options)) (*resourcegroupstaggingapi.GetResourcesOutput, error) {
 	args := m.Called(ctx, params, optFns)
 	if args.Get(0) == nil {
@@ -44,7 +46,7 @@ func (m *MockResourceGroupsTaggingClient) GetResources(ctx context.Context, para
 	return args.Get(0).(*resourcegroupstaggingapi.GetResourcesOutput), args.Error(1)
 }
 
-// Prepares raw settings and executes the resulting search for discovery behavior tests.
+// Prepares cfg with p and executes the search using ctx. Returns resources or a preparation or discovery error.
 func discoverForTest(p *Provider, ctx context.Context, cfg providers.ProviderConfig) ([]providers.Resource, error) {
 	discover, err := p.Prepare(cfg)
 	if err != nil {
@@ -87,12 +89,13 @@ func TestPreparedDiscoveryOwnsSettings(t *testing.T) {
 	assert.Nil(t, invalid)
 }
 
+// Constructs a provider and requires the resource type "elasticache_redis".
 func TestProvider_Type(t *testing.T) {
 	provider := NewProvider()
 	assert.Equal(t, "elasticache_redis", provider.Type())
 }
 
-// Mutating one node's tags or the input tags must not change another node's tags.
+// Extracts two nodes and mutates input and output tag maps; requires independent tag values for each node and the input.
 func TestExtractNodesOwnTags(t *testing.T) {
 	tags := map[string]string{"env": "prod"}
 	groups := []elasticachetypes.ReplicationGroup{{NodeGroups: []elasticachetypes.NodeGroup{{NodeGroupMembers: []elasticachetypes.NodeGroupMember{
@@ -108,7 +111,7 @@ func TestExtractNodesOwnTags(t *testing.T) {
 	assert.Equal(t, "prod", nodes[1].Tags["env"])
 }
 
-// Cluster mode must fail discovery for both filtered and unfiltered searches instead of generating empty output.
+// Returns cluster-mode groups from mocked APIs for filtered and unfiltered searches; requires an unsupported-mode error and no resources.
 func TestProvider_DiscoverClusterMode(t *testing.T) {
 	for _, filtered := range []bool{false, true} {
 		t.Run(fmt.Sprint(filtered), func(t *testing.T) {
@@ -134,7 +137,7 @@ func TestProvider_DiscoverClusterMode(t *testing.T) {
 	}
 }
 
-// Invalid tag values must fail before any AWS API is called.
+// Supplies non-string tag values with API mocks that accept no calls and requires validation errors before API access.
 func TestProvider_DiscoverRejectsInvalidTagValues(t *testing.T) {
 	for _, value := range []interface{}{123, true, nil, []interface{}{"prod"}, map[string]interface{}{"env": "prod"}} {
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
@@ -148,7 +151,7 @@ func TestProvider_DiscoverRejectsInvalidTagValues(t *testing.T) {
 	}
 }
 
-// All pages must be returned, and a later API failure must discard partial results.
+// Mocks two response pages and an optional second-page error; requires all mappings on success and no partial mappings on failure.
 func TestProvider_GetReplicationGroupsByTagsPagination(t *testing.T) {
 	for _, failSecondPage := range []bool{false, true} {
 		t.Run(fmt.Sprintf("second page error=%t", failSecondPage), func(t *testing.T) {
@@ -188,7 +191,7 @@ func TestProvider_GetReplicationGroupsByTagsPagination(t *testing.T) {
 	}
 }
 
-// An empty page with a continuation token must be followed; a repeated token must return an error.
+// Mocks an empty page with a continuation token and a second page; requires continued pagination and rejection of a repeated token.
 func TestProvider_GetReplicationGroupsByTagsEmptyPage(t *testing.T) {
 	for _, repeated := range []bool{false, true} {
 		t.Run(fmt.Sprintf("repeated token=%t", repeated), func(t *testing.T) {
@@ -218,7 +221,7 @@ func TestProvider_GetReplicationGroupsByTagsEmptyPage(t *testing.T) {
 	}
 }
 
-// Missing AWS profiles must fail discovery before any API request.
+// Selects a missing profile in empty AWS configuration files and requires a configuration error with no resources.
 func TestProvider_DiscoverAWSConfigError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "aws-config")
 	require.NoError(t, os.WriteFile(path, nil, 0600))
@@ -230,7 +233,7 @@ func TestProvider_DiscoverAWSConfigError(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-// Injected clients must work without reading the user's AWS configuration.
+// Injects API mocks while selecting a missing AWS profile and requires successful discovery through those clients.
 func TestProvider_DiscoverWithInjectedClients(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "aws-config")
 	require.NoError(t, os.WriteFile(configPath, nil, 0600))
@@ -249,7 +252,7 @@ func TestProvider_DiscoverWithInjectedClients(t *testing.T) {
 	client.AssertExpectations(t)
 }
 
-// Reusing a provider across regions must produce clients for each requested region.
+// Initializes clients repeatedly for different regions and verifies each client region and unchanged client references on the original provider.
 func TestProvider_ClientsUseRequestedRegion(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "aws-config")
 	require.NoError(t, os.WriteFile(configPath, nil, 0600))
@@ -267,7 +270,7 @@ func TestProvider_ClientsUseRequestedRegion(t *testing.T) {
 	assert.Nil(t, provider.elasticacheClient)
 }
 
-// Missing endpoint fields must be skipped without losing complete nodes.
+// Supplies complete and incomplete endpoints and requires only nodes with a nonempty address and positive port.
 func TestExtractNodesWithIncompleteEndpoints(t *testing.T) {
 	groups := []elasticachetypes.ReplicationGroup{{NodeGroups: []elasticachetypes.NodeGroup{{
 		NodeGroupMembers: []elasticachetypes.NodeGroupMember{
@@ -286,7 +289,7 @@ func TestExtractNodesWithIncompleteEndpoints(t *testing.T) {
 	assert.Equal(t, "", result[0].Metadata["ShardName"])
 }
 
-// Without tag filters, discovery includes untagged groups across all pages and preserves existing tags.
+// Mocks tagged and untagged groups across pages with absent or empty tag filters; requires both groups and preservation of their tags and cluster names.
 func TestProvider_DiscoverWithoutTagFilters(t *testing.T) {
 	for _, filters := range []map[string]interface{}{nil, {"tags": map[string]interface{}{}}} {
 		t.Run(fmt.Sprint(filters), func(t *testing.T) {
@@ -336,7 +339,7 @@ func TestProvider_DiscoverWithoutTagFilters(t *testing.T) {
 	}
 }
 
-// An empty tagging result must not prevent discovery of an entirely untagged group.
+// Mocks an empty tagging result and an untagged replication group; requires discovery of the group without tag filters.
 func TestProvider_DiscoverOnlyUntaggedResources(t *testing.T) {
 	tagging := new(MockResourceGroupsTaggingClient)
 	client := new(MockElastiCacheClient)
@@ -362,7 +365,7 @@ func TestProvider_DiscoverOnlyUntaggedResources(t *testing.T) {
 	client.AssertExpectations(t)
 }
 
-// Missing ARNs and nil API responses must return errors instead of panicking.
+// Mocks missing ARNs, missing group IDs, and nil API responses; requires the corresponding errors and no resources.
 func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
 	for _, name := range []string{"nil tagging response", "missing ARN", "empty ARN", "missing group ID", "nil describe response"} {
 		t.Run(name, func(t *testing.T) {
@@ -399,7 +402,7 @@ func TestProvider_DiscoverIncompleteResponses(t *testing.T) {
 	}
 }
 
-// Pagination failures must discard earlier pages, including repeated continuation markers.
+// Mocks a successful first page followed by an API error, nil response, or repeated marker; requires an error and no partial groups.
 func TestProvider_DescribeReplicationGroupsPaginationFailure(t *testing.T) {
 	for _, name := range []string{"API error", "nil response", "repeated marker"} {
 		t.Run(name, func(t *testing.T) {
@@ -433,6 +436,7 @@ func TestProvider_DescribeReplicationGroupsPaginationFailure(t *testing.T) {
 	}
 }
 
+// Supplies valid settings, a missing region, and a non-map tags filter; requires acceptance of valid settings and the corresponding validation errors.
 func TestProvider_Prepare(t *testing.T) {
 	provider := NewProvider()
 
@@ -477,6 +481,7 @@ func TestProvider_Prepare(t *testing.T) {
 	})
 }
 
+// Uses mocked API responses to verify node endpoints, original tags, and metadata, empty results for unmatched filters, and errors for invalid settings or API failures.
 func TestProvider_Discover(t *testing.T) {
 	t.Run("successful discovery", func(t *testing.T) {
 		mockTagging := new(MockResourceGroupsTaggingClient)
@@ -485,7 +490,6 @@ func TestProvider_Discover(t *testing.T) {
 
 		provider := NewProviderWithClients(mockElastiCache, mockTagging)
 
-		// Setup mocks
 		taggingOutput := &resourcegroupstaggingapi.GetResourcesOutput{
 			ResourceTagMappingList: []taggingtypes.ResourceTagMapping{
 				{
@@ -714,7 +718,6 @@ func TestProvider_Discover(t *testing.T) {
 		assert.Contains(t, hosts, "primary.cache.amazonaws.com")
 		assert.Contains(t, hosts, "replica.cache.amazonaws.com")
 
-		// Check IsPrimary flag
 		for _, res := range result {
 			if res.Host == "primary.cache.amazonaws.com" {
 				assert.Equal(t, true, res.Metadata["IsPrimary"])
@@ -742,7 +745,6 @@ func TestProvider_Discover(t *testing.T) {
 
 		provider := NewProviderWithClients(new(MockElastiCacheClient), mockTagging)
 
-		// Mock GetResources to return an error
 		mockTagging.On("GetResources", ctx, mock.Anything, mock.Anything).Return(nil, assert.AnError)
 
 		cfg := providers.ProviderConfig{
@@ -792,6 +794,7 @@ func TestProvider_Discover(t *testing.T) {
 	})
 }
 
+// Converts populated and empty tag maps and requires one single-value filter per input pair, without imposing filter order.
 func TestBuildTagFilters(t *testing.T) {
 	t.Run("build tag filters", func(t *testing.T) {
 		tags := map[string]string{
@@ -820,7 +823,7 @@ func TestBuildTagFilters(t *testing.T) {
 	})
 }
 
-// Returns two filtered groups with distinct tags and verifies IDs and tags stay associated without intermediate lookup maps.
+// Mocks two filtered groups with distinct tags and incomplete tag pairs; verifies that node IDs retain the associated complete tags and cluster names.
 func TestFilteredDiscoveryKeepsMappingTags(t *testing.T) {
 	t.Parallel()
 	client := new(MockElastiCacheClient)

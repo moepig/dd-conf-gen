@@ -18,8 +18,10 @@ import (
 	"github.com/moepig/dd-conf-gen/providers/elasticache"
 )
 
+// Build version; release builds may override it through linker flags.
 var version = "0.25.0"
 
+// Initializes the application and exits with the CLI status.
 func main() {
 	registry := providers.NewRegistry(map[string]providers.Factory{
 		"elasticache_redis": func() providers.Provider { return elasticache.NewProvider() },
@@ -28,14 +30,18 @@ func main() {
 	os.Exit(app.runWithSignals(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-// Runs the CLI with cancellation on interrupt or termination, releasing signal handlers on return.
+// Runs the CLI with cancellation on interrupt or termination.
+//
+// Accepts command-line args and stdout/stderr destinations and returns the CLI exit code. Signal handlers are released on return.
 func (app *application) runWithSignals(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return app.runCLI(ctx, args, stdout, stderr)
 }
 
-// Parses args and runs generation, writing diagnostics to stderr and returning an exit code.
+// Parses CLI options and runs configuration generation.
+//
+// Uses ctx for cancellation, args for options, stdout for version output, and stderr for usage and diagnostics. Returns 0 on success or help, 2 on option parsing errors, and 1 on invalid execution settings or generation failure.
 func (app *application) runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("dd-conf-gen", flag.ContinueOnError)
 	flags.SetOutput(stderr)

@@ -10,13 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Holds a resource type and mocked preparation calls and results.
 type registryMockProvider struct {
 	mock.Mock
 	kind string
 }
 
+// Returns the configured mock resource type.
 func (p *registryMockProvider) Type() string { return p.kind }
 
+// Records cfg and returns the configured search and error.
 func (p *registryMockProvider) Prepare(cfg ProviderConfig) (Discovery, error) {
 	args := p.Called(cfg)
 	if args.Get(0) == nil {
@@ -25,7 +28,7 @@ func (p *registryMockProvider) Prepare(cfg ProviderConfig) (Discovery, error) {
 	return args.Get(0).(Discovery), args.Error(1)
 }
 
-// Registered mock providers must be retrievable by type and listed independently of registration order.
+// Registers mock providers and checks lookup identity, listed types, missing-type errors, and isolation between registries.
 func TestRegistry(t *testing.T) {
 	t.Parallel()
 	r := &Registry{}
@@ -56,7 +59,7 @@ func TestRegistry(t *testing.T) {
 	assert.Same(t, first, actual)
 }
 
-// Each lookup must construct an independent provider; factories may inspect the registry without deadlocking.
+// Uses a factory that lists registrations and creates distinct providers; verifies per-lookup invocation and rejection of nil factories, nil results, and mismatched types.
 func TestRegistryFactories(t *testing.T) {
 	t.Parallel()
 	var r *Registry
@@ -76,7 +79,7 @@ func TestRegistryFactories(t *testing.T) {
 	}
 }
 
-// Looks up and lists an immutable set of factories concurrently and requires independent provider results.
+// Looks up and lists registered factories concurrently and requires matching provider types and a complete registration list.
 func TestRegistryConcurrentAccess(t *testing.T) {
 	t.Parallel()
 	const count = 32

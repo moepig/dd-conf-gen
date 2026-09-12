@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Compiles and executes a template file for tests of complete rendering behavior.
+// Compiles the template at path and renders data. Returns rendered bytes or a compilation or rendering error.
 func renderForTest(path string, data TemplateData) ([]byte, error) {
 	compiled, err := Compile(context.Background(), path)
 	if err != nil {
@@ -21,7 +21,7 @@ func renderForTest(path string, data TemplateData) ([]byte, error) {
 	return compiled.Render(context.Background(), data)
 }
 
-// Renders one compiled template concurrently and requires independent output buffers for each resource set.
+// Renders one compiled template concurrently with distinct resource sets and requires each output to contain only its own resource data.
 func TestCompiledTemplateConcurrentRendering(t *testing.T) {
 	t.Parallel()
 	path := createTempFile(t, "{{range .Resources}}{{.Host}}{{end}}")
@@ -63,6 +63,7 @@ func TestTemplateCancellation(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+// Renders file-based templates with resource fields, tags, metadata, and literal text; requires the expected content, empty-resource handling, and read, parse, or execution errors for invalid inputs.
 func TestRenderer_Render(t *testing.T) {
 	t.Run("simple template", func(t *testing.T) {
 		templateContent := `init_config:
@@ -164,7 +165,7 @@ instances:
 		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
-		// Note: map iteration order is not guaranteed, so we check both possible orders
+		// Checks the rendered endpoint and tag values independently of their positions.
 		resultStr := string(result)
 		assert.Contains(t, resultStr, "- host: redis1.example.com")
 		assert.Contains(t, resultStr, "port: 6379")
@@ -332,7 +333,7 @@ instances:
 	})
 }
 
-// Missing map keys accessed with dot notation must fail without returning partially rendered configuration.
+// Renders templates that access missing map keys with dot notation and requires an error with no partial content.
 func TestRendererMissingMapKey(t *testing.T) {
 	for _, field := range []string{"Tags.missing", "Metadata.ClustrName"} {
 		t.Run(field, func(t *testing.T) {
@@ -345,7 +346,7 @@ func TestRendererMissingMapKey(t *testing.T) {
 	}
 }
 
-// Optional tag lookup through index must remain usable in conditional template branches.
+// Renders an index lookup for an absent tag in a conditional and requires the absent branch without an error.
 func TestRendererOptionalTag(t *testing.T) {
 	path := createTempFile(t, `{{range .Resources}}{{if index .Tags "optional"}}present{{else}}absent{{end}}{{end}}`)
 	t.Cleanup(func() { os.Remove(path) })
@@ -354,7 +355,7 @@ func TestRendererOptionalTag(t *testing.T) {
 	assert.Equal(t, "absent", string(result))
 }
 
-// Compiled templates must use the validated source even if the template file changes before rendering.
+// Overwrites a template file after compilation and requires rendering to retain the compiled content.
 func TestCompiledTemplateUsesValidatedSource(t *testing.T) {
 	path := createTempFile(t, "validated")
 	t.Cleanup(func() { os.Remove(path) })
@@ -366,6 +367,7 @@ func TestCompiledTemplateUsesValidatedSource(t *testing.T) {
 	assert.Equal(t, "validated", string(content))
 }
 
+// Writes content to a temporary template file and returns its path. Uses t to fail on file errors; the caller is responsible for removal.
 func createTempFile(t *testing.T, content string) string {
 	tmpfile, err := os.CreateTemp("", "template-*.yaml")
 	require.NoError(t, err)

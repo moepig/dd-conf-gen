@@ -34,6 +34,7 @@ func TestLoadGenConfigStrictYAML(t *testing.T) {
 	assert.Len(t, cfg.Resources, 1)
 }
 
+// Loads configuration files with valid definitions, missing fields, duplicate names, invalid references, and malformed YAML; requires parsed values or the corresponding errors, including missing-file errors.
 func TestLoadGenConfig(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		content := `resources:
@@ -248,6 +249,7 @@ outputs:
 	})
 }
 
+// Writes content to a temporary YAML file and returns its path. Uses t to fail on file errors; the caller is responsible for removal.
 func createTempFile(t *testing.T, content string) string {
 	tmpfile, err := os.CreateTemp("", "meta-config-*.yaml")
 	require.NoError(t, err)
@@ -257,6 +259,7 @@ func createTempFile(t *testing.T, content string) string {
 	return tmpfile.Name()
 }
 
+// Validates multiple resource and output definitions and loads nested filters from YAML; requires acceptance of valid references and retention of a non-nil filter map.
 func TestValidateGenConfig(t *testing.T) {
 	t.Run("valid config with multiple resources and outputs", func(t *testing.T) {
 		cfg := &GenConfig{

@@ -7,7 +7,9 @@ import (
 	"strings"
 )
 
-// Resolves existing symlinks before parent components and returns an absolute path, allowing missing directories.
+// Resolves path to an absolute path.
+//
+// Relative paths use the working directory. Existing symlinks are resolved before subsequent parent components, and missing components are allowed. Returns an error for an empty path, a non-directory ancestor, an inspection failure, or an unresolvable symlink.
 func ResolvePath(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("output path is empty")

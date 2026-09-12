@@ -16,12 +16,14 @@ type Registry struct {
 	providers map[string]Factory
 }
 
-// Copies factory registrations so subsequent changes to the input map cannot affect lookups.
+// Returns a registry containing a copy of factories, keyed by resource type. Subsequent changes to the supplied map do not affect registrations.
 func NewRegistry(factories map[string]Factory) *Registry {
 	return &Registry{providers: maps.Clone(factories)}
 }
 
-// Creates a provider for resourceType, or returns an error if it is unregistered or its factory is invalid.
+// Constructs a provider for resourceType.
+//
+// Returns the factory result, or nil and an error if the type is unregistered, the factory or result is nil, or the result reports a different type.
 func (r *Registry) Get(resourceType string) (Provider, error) {
 	factory, ok := r.providers[resourceType]
 	if !ok {
@@ -37,7 +39,7 @@ func (r *Registry) Get(resourceType string) (Provider, error) {
 	return provider, nil
 }
 
-// Detects both nil interfaces and nil values held by provider interfaces without invoking provider methods.
+// Reports whether provider is a nil interface or contains a nil value without invoking provider methods.
 func isNilProvider(provider Provider) bool {
 	if provider == nil {
 		return true
@@ -51,7 +53,7 @@ func isNilProvider(provider Provider) bool {
 	}
 }
 
-// Returns the registered resource types in lexical order.
+// Returns an independently owned slice of registered resource types in lexical order.
 func (r *Registry) List() []string {
 	return slices.Sorted(maps.Keys(r.providers))
 }

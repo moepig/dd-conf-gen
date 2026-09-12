@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Raw configuration must either produce typed settings or fail without discarding invalid conditions.
+// Parses absent, empty, valid, and invalid raw filters; requires preserved region and string tags on success, or an error and zero settings on failure.
 func TestParseConfig(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
@@ -41,7 +41,7 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
-// Mutating either raw or typed tags must not affect the other representation.
+// Mutates raw and parsed tag maps separately and verifies that each retains its own values.
 func TestParseConfigOwnsTags(t *testing.T) {
 	t.Parallel()
 	raw := map[string]interface{}{"env": "prod"}
