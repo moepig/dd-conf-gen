@@ -16,33 +16,11 @@ type TemplateData struct {
 	Resources []providers.Resource
 }
 
-// Renders templates from the file paths supplied by callers.
-type Renderer struct{}
-
-// Creates a stateless template renderer.
-func NewRenderer() *Renderer {
-	return &Renderer{}
-}
-
-// Render renders a template with the given data
-func (r *Renderer) Render(templatePath string, data TemplateData) ([]byte, error) {
-	return r.RenderContext(context.Background(), templatePath, data)
-}
-
-// Renders a template file with data, sending diagnostics to the context logger.
-func (r *Renderer) RenderContext(ctx context.Context, templatePath string, data TemplateData) ([]byte, error) {
-	compiled, err := r.CompileContext(ctx, templatePath)
-	if err != nil {
-		return nil, err
-	}
-	return compiled.RenderContext(ctx, data)
-}
-
 // Holds a parsed template that can be rendered without rereading the source file.
 type CompiledTemplate struct{ template *template.Template }
 
 // Reads and parses a template file, returning errors before rendering or discovery is needed.
-func (r *Renderer) CompileContext(ctx context.Context, templatePath string) (*CompiledTemplate, error) {
+func Compile(ctx context.Context, templatePath string) (*CompiledTemplate, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -66,7 +44,7 @@ func (r *Renderer) CompileContext(ctx context.Context, templatePath string) (*Co
 }
 
 // Executes a compiled template with data and returns no partial content on failure.
-func (t *CompiledTemplate) RenderContext(ctx context.Context, data TemplateData) ([]byte, error) {
+func (t *CompiledTemplate) Render(ctx context.Context, data TemplateData) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

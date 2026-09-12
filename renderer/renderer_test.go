@@ -12,6 +12,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Compiles and executes a template file for tests of complete rendering behavior.
+func renderForTest(path string, data TemplateData) ([]byte, error) {
+	compiled, err := Compile(context.Background(), path)
+	if err != nil {
+		return nil, err
+	}
+	return compiled.Render(context.Background(), data)
+}
+
+// Renders one compiled template concurrently and requires independent output buffers for each resource set.
+func TestCompiledTemplateConcurrentRendering(t *testing.T) {
+	t.Parallel()
+	path := createTempFile(t, "{{range .Resources}}{{.Host}}{{end}}")
+	t.Cleanup(func() { os.Remove(path) })
+	compiled, err := Compile(context.Background(), path)
+	require.NoError(t, err)
+	for _, host := range []string{"first", "second", "third"} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+			data, err := compiled.Render(context.Background(), TemplateData{Resources: []providers.Resource{{Host: host}}})
+			require.NoError(t, err)
+			assert.Equal(t, host, string(data))
+		})
+	}
+}
+
 // Cancels before and during template execution and requires the context error with no partial output.
 func TestTemplateCancellation(t *testing.T) {
 	t.Parallel()
@@ -21,7 +47,7 @@ func TestTemplateCancellation(t *testing.T) {
 			defer cancel()
 			tmpl := template.Must(template.New("test").Funcs(template.FuncMap{"cancel": func() string { cancel(); return "" }}).Parse(source))
 			compiled := &CompiledTemplate{template: tmpl}
-			data, err := compiled.RenderContext(ctx, TemplateData{})
+			data, err := compiled.Render(ctx, TemplateData{})
 			require.ErrorIs(t, err, context.Canceled)
 			assert.Nil(t, data)
 		})
@@ -29,10 +55,10 @@ func TestTemplateCancellation(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 	compiled := &CompiledTemplate{template: template.Must(template.New("test").Parse("output"))}
-	data, err := compiled.RenderContext(ctx, TemplateData{})
+	data, err := compiled.Render(ctx, TemplateData{})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Nil(t, data)
-	result, err := NewRenderer().CompileContext(ctx, "missing-template")
+	result, err := Compile(ctx, "missing-template")
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Nil(t, result)
 }
@@ -50,7 +76,6 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -60,7 +85,7 @@ instances:
 			},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		expected := `init_config:
@@ -86,7 +111,6 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -96,7 +120,7 @@ instances:
 			},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		expected := `init_config:
@@ -124,7 +148,6 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -138,7 +161,7 @@ instances:
 			},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		// Note: map iteration order is not guaranteed, so we check both possible orders
@@ -165,7 +188,6 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -178,7 +200,7 @@ instances:
 			},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		resultStr := string(result)
@@ -198,7 +220,6 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{Host: "redis1.example.com", Port: 6379},
@@ -207,7 +228,7 @@ instances:
 			},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		resultStr := string(result)
@@ -228,7 +249,6 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{
 				{
@@ -242,7 +262,7 @@ instances:
 			},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		expected := `instances:
@@ -255,10 +275,9 @@ instances:
 	})
 
 	t.Run("file not found", func(t *testing.T) {
-		renderer := NewRenderer()
 		data := TemplateData{}
 
-		_, err := renderer.Render("/nonexistent/template.yaml", data)
+		_, err := renderForTest("/nonexistent/template.yaml", data)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read template file")
 	})
@@ -268,10 +287,9 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{}
 
-		_, err := renderer.Render(tmpfile, data)
+		_, err := renderForTest(tmpfile, data)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse template")
 	})
@@ -281,10 +299,9 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{}
 
-		_, err := renderer.Render(tmpfile, data)
+		_, err := renderForTest(tmpfile, data)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to execute template")
 	})
@@ -300,12 +317,11 @@ instances:
 		tmpfile := createTempFile(t, templateContent)
 		defer os.Remove(tmpfile)
 
-		renderer := NewRenderer()
 		data := TemplateData{
 			Resources: []providers.Resource{},
 		}
 
-		result, err := renderer.Render(tmpfile, data)
+		result, err := renderForTest(tmpfile, data)
 		require.NoError(t, err)
 
 		expected := `init_config:
@@ -322,7 +338,7 @@ func TestRendererMissingMapKey(t *testing.T) {
 		t.Run(field, func(t *testing.T) {
 			path := createTempFile(t, "prefix{{range .Resources}}{{."+field+"}}{{end}}")
 			t.Cleanup(func() { os.Remove(path) })
-			result, err := NewRenderer().Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}, Metadata: map[string]interface{}{"ClusterName": "redis"}}}})
+			result, err := renderForTest(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}, Metadata: map[string]interface{}{"ClusterName": "redis"}}}})
 			require.ErrorContains(t, err, "map has no entry for key")
 			assert.Nil(t, result)
 		})
@@ -333,7 +349,7 @@ func TestRendererMissingMapKey(t *testing.T) {
 func TestRendererOptionalTag(t *testing.T) {
 	path := createTempFile(t, `{{range .Resources}}{{if index .Tags "optional"}}present{{else}}absent{{end}}{{end}}`)
 	t.Cleanup(func() { os.Remove(path) })
-	result, err := NewRenderer().Render(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}}}})
+	result, err := renderForTest(path, TemplateData{Resources: []providers.Resource{{Tags: map[string]string{}}}})
 	require.NoError(t, err)
 	assert.Equal(t, "absent", string(result))
 }
@@ -342,10 +358,10 @@ func TestRendererOptionalTag(t *testing.T) {
 func TestCompiledTemplateUsesValidatedSource(t *testing.T) {
 	path := createTempFile(t, "validated")
 	t.Cleanup(func() { os.Remove(path) })
-	compiled, err := NewRenderer().CompileContext(context.Background(), path)
+	compiled, err := Compile(context.Background(), path)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, []byte("{{"), 0600))
-	content, err := compiled.RenderContext(context.Background(), TemplateData{})
+	content, err := compiled.Render(context.Background(), TemplateData{})
 	require.NoError(t, err)
 	assert.Equal(t, "validated", string(content))
 }

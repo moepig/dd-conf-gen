@@ -115,7 +115,7 @@ func (app *application) generate(ctx context.Context, configPath string) ([]gene
 		}
 
 		// Render template
-		output, err := prepared.template.RenderContext(ctx, templateData)
+		output, err := prepared.template.Render(ctx, templateData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", path, err)
 		}
@@ -163,7 +163,6 @@ type preparedOutput struct {
 
 // Parses all templates and validates destinations before resource discovery, without writing outputs.
 func (app *application) prepareOutputs(ctx context.Context, outputs []config.OutputConfig, configDir string) ([]preparedOutput, error) {
-	rend := renderer.NewRenderer()
 	prepared := make([]preparedOutput, 0, len(outputs))
 	for _, out := range outputs {
 		if err := ctx.Err(); err != nil {
@@ -173,7 +172,7 @@ func (app *application) prepareOutputs(ctx context.Context, outputs []config.Out
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(configDir, path)
 		}
-		template, err := rend.CompileContext(ctx, path)
+		template, err := renderer.Compile(ctx, path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render template for '%s': %w", out.OutputFile, err)
 		}
