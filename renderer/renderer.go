@@ -5,15 +5,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/moepig/dd-conf-gen/internal/logging"
 	"github.com/moepig/dd-conf-gen/providers"
+	"gopkg.in/yaml.v3"
 )
 
-// Holds the resource list available to template expressions.
+// Holds resources and resolved secret strings available to template expressions.
 type TemplateData struct {
 	Resources []providers.Resource
+	Secrets   map[string]string
 }
 
 // Holds a parsed template that can be rendered without rereading the source file.
@@ -34,7 +37,7 @@ func Compile(ctx context.Context, templatePath string) (*CompiledTemplate, error
 
 	logging.FromContext(ctx).Debug("Read template file", "path", templatePath, "bytes", len(content))
 
-	tmpl, err := template.New("config").Option("missingkey=error").Parse(string(content))
+	tmpl, err := template.New("config").Funcs(template.FuncMap{"quote": quote}).Option("missingkey=error").Parse(string(content))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -46,7 +49,7 @@ func Compile(ctx context.Context, templatePath string) (*CompiledTemplate, error
 
 // Renders data with the compiled template, using ctx for cancellation and logging.
 //
-// Returns independently buffered output, or nil and an execution or cancellation error with no partial content.
+// Returns independently buffered output, or nil and an execution or cancellation error with no partial content. Execution error details are hidden when secret values are present.
 func (t *CompiledTemplate) Render(ctx context.Context, data TemplateData) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -55,6 +58,12 @@ func (t *CompiledTemplate) Render(ctx context.Context, data TemplateData) ([]byt
 
 	var buf bytes.Buffer
 	if err := t.template.Execute(contextWriter{ctx: ctx, buffer: &buf}, data); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if len(data.Secrets) > 0 {
+			return nil, fmt.Errorf("failed to execute template (details hidden because secret values are present)")
+		}
 		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -78,4 +87,14 @@ func (w contextWriter) Write(data []byte) (int, error) {
 		return 0, err
 	}
 	return w.buffer.Write(data)
+}
+
+// Encodes value as a double-quoted YAML scalar, returning serialization errors without the value.
+func quote(value string) (string, error) {
+	node := yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value, Style: yaml.DoubleQuotedStyle}
+	data, err := yaml.Marshal(&node)
+	if err != nil {
+		return "", fmt.Errorf("failed to quote YAML string")
+	}
+	return strings.TrimSuffix(string(data), "\n"), nil
 }

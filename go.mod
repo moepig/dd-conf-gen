@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.52.1
 	github.com/aws/aws-sdk-go-v2/service/rds v1.116.0
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.31.10
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.1
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 )

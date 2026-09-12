@@ -80,6 +80,14 @@ func validateGenConfig(cfg *GenConfig) error {
 	}
 
 	for i, out := range cfg.Outputs {
+		for name, ref := range out.Data.Secrets {
+			if name == "" {
+				return fmt.Errorf("output[%d]: secret name must not be empty", i)
+			}
+			if err := ref.Validate(); err != nil {
+				return fmt.Errorf("output[%d]: secret %q: %w", i, name, err)
+			}
+		}
 		switch out.OnEmpty {
 		case "", "render", "error", "keep":
 		default:

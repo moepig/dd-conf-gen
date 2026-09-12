@@ -11,10 +11,16 @@ import (
 type FileWriter struct{}
 
 // Holds a validated absolute destination; its zero value cannot be written.
-type Destination struct{ path string }
+type Destination struct {
+	path       string
+	restricted bool
+}
 
 // Returns the resolved absolute destination path, or an empty string for the zero value.
 func (d Destination) Path() string { return d.path }
+
+// Returns a copy requiring owner-only read and write permissions when saved.
+func (d Destination) Restricted() Destination { d.restricted = true; return d }
 
 // Resolves and validates path without creating files or directories.
 //
@@ -41,6 +47,10 @@ func (FileWriter) Write(destination Destination, content []byte) error {
 	dir := filepath.Dir(target)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory '%s': %w", dir, err)
+	}
+	if destination.restricted {
+		permissions := os.FileMode(0600)
+		mode = &permissions
 	}
 	return writeTemporaryFile(target, content, mode)
 }

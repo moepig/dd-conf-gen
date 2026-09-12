@@ -20,7 +20,7 @@ import (
 )
 
 // Build version; release builds may override it through linker flags.
-var version = "0.30.0"
+var version = "0.31.0"
 
 // Initializes the application and exits with the CLI status.
 func main() {
