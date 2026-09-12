@@ -91,61 +91,55 @@ outputs:
 
 #### 基本的な使用例
 
+全ノードの接続情報とクラスター・シャードのタグを出力するテンプレートを、以下に示す。
+
 ```yaml
 init_config:
 
 instances:
+{{- if not .Resources }} []
+{{- end }}
 {{- range .Resources }}
-  - host: {{ .Host }}
+  - host: {{ .Host | quote }}
     port: {{ .Port }}
     username: "%%env_REDIS_USERNAME%%"
     password: "%%env_REDIS_PASSWORD%%"
     tags:
-      - "cluster:{{ index .Metadata "ClusterName" }}"
-      - "shard:{{ index .Metadata "ShardName" }}"
+      - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}
+      - {{ printf "shard:%s" (index .Metadata "ShardName") | quote }}
     {{- if index .Tags "Environment" }}
-      - "env:{{ index .Tags "Environment" }}"
+      - {{ printf "env:%s" (index .Tags "Environment") | quote }}
     {{- end }}
 {{- end }}
 ```
 
 #### プライマリノードのみを使用する例
 
-```yaml
-init_config:
+`RoleKnown` と `IsPrimary` が両方 `true` のノードを選択する。対象がない場合は `instances: []` を出力する。
 
-instances:
-{{- range .Resources }}
-  {{- if and (index .Metadata "RoleKnown") (index .Metadata "IsPrimary") }}
-  - host: {{ .Host }}
-    port: {{ .Port }}
-    username: "%%env_REDIS_USERNAME%%"
-    password: "%%env_REDIS_PASSWORD%%"
-    tags:
-      - "role:primary"
-      - "cluster:{{ index .Metadata "ClusterName" }}"
-      - "shard:{{ index .Metadata "ShardName" }}"
-  {{- end }}
-{{- end }}
-```
+テンプレートと複数出力の設定例は、[redis-primary.yaml.tmpl](../../examples/templates/redis-primary.yaml.tmpl) と [gen-config-redis-roles.yaml](../../examples/gen-config-redis-roles.yaml) を参照。
 
 #### タグとメタデータを組み合わせた例
 
+ロールとクラウドタグを出力するテンプレートを、以下に示す。
+
 ```yaml
 init_config:
 
 instances:
+{{- if not .Resources }} []
+{{- end }}
 {{- range .Resources }}
-  - host: {{ .Host }}
+  - host: {{ .Host | quote }}
     port: {{ .Port }}
     username: "%%env_REDIS_USERNAME%%"
     password: "%%env_REDIS_PASSWORD%%"
     tags:
-      - "cluster:{{ index .Metadata "ClusterName" }}"
-      - "shard:{{ index .Metadata "ShardName" }}"
+      - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}
+      - {{ printf "shard:%s" (index .Metadata "ShardName") | quote }}
       - "role:{{ if not (index .Metadata "RoleKnown") }}unknown{{ else if index .Metadata "IsPrimary" }}primary{{ else }}replica{{ end }}"
     {{- range $key, $value := .Tags }}
-      - "{{ $key }}:{{ $value }}"
+      - {{ printf "%s:%s" $key $value | quote }}
     {{- end }}
 {{- end }}
 ```

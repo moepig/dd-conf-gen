@@ -1,17 +1,19 @@
 init_config:
 
 instances:
+{{- if not .Resources }} []
+{{- end }}
 {{- range .Resources }}
-  - host: {{ .Host }}
+  - host: {{ .Host | quote }}
     port: {{ .Port }}
     username: "%%env_REDIS_USERNAME%%"
     password: "%%env_REDIS_PASSWORD%%"
     tags:
       - "instancetag:bar"
     {{- if index .Tags "awsenv" }}
-      - env:{{ index .Tags "awsenv" }}
+      - {{ printf "env:%s" (index .Tags "awsenv") | quote }}
     {{- end }}
     {{- if index .Tags "service" }}
-      - team:{{ index .Tags "service" }}
+      - {{ printf "team:%s" (index .Tags "service") | quote }}
     {{- end }}
 {{- end }}

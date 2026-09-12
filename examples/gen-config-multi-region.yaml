@@ -1,0 +1,28 @@
+resources:
+  - name: tokyo_redis
+    type: elasticache_redis
+    region: ap-northeast-1
+    filters:
+      tag_conditions:
+        - key: awsenv
+          operator: in
+          values: [Production, Staging]
+        - key: monitoring-disabled
+          operator: not_exists
+  - name: osaka_redis
+    type: elasticache_redis
+    region: ap-northeast-3
+    filters:
+      tag_conditions:
+        - key: awsenv
+          operator: in
+          values: [Production, Staging]
+        - key: monitoring-disabled
+          operator: not_exists
+
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /etc/datadog-agent/conf.d/redisdb.d/conf.yaml
+    on_empty: error
+    data:
+      resource_names: [tokyo_redis, osaka_redis]

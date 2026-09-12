@@ -53,21 +53,9 @@ dd-conf-gen -config examples/gen-config-aurora-mysql.yaml
 | `.Metadata.EngineVersion` | string | DB インスタンスのエンジンバージョン |
 | `.Metadata.AvailabilityZone` | string | DB インスタンスの Availability Zone |
 
-Writer のみを出力するテンプレートの例を、以下に示す。
+Writer のみを出力する場合は `IsWriter` で選択する。対象がない場合は `instances: []` を出力する。
 
-```yaml
-init_config:
-
-instances:
-{{- range .Resources }}
-  {{- if .Metadata.IsWriter }}
-  - host: {{ printf "%q" .Host }}
-    port: {{ .Port }}
-    username: "%%env_MYSQL_USERNAME%%"
-    password: "%%env_MYSQL_PASSWORD%%"
-  {{- end }}
-{{- end }}
-```
+テンプレートと複数出力の設定例は、[mysql-writer.yaml.tmpl](../../examples/templates/mysql-writer.yaml.tmpl) と [gen-config-aurora-roles.yaml](../../examples/gen-config-aurora-roles.yaml) を参照。
 
 ## AWS 権限
 

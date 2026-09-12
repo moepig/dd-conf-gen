@@ -1,0 +1,19 @@
+resources:
+  - name: production_redis_nodes
+    type: elasticache_redis
+    region: ap-northeast-1
+    filters:
+      tags:
+        awsenv: Production
+
+outputs:
+  - template: templates/redis.yaml.tmpl
+    output_file: /tmp/dd-conf-gen/redis-all.yaml
+    on_empty: error
+    data:
+      resource_name: production_redis_nodes
+  - template: templates/redis-primary.yaml.tmpl
+    output_file: /tmp/dd-conf-gen/redis-primary.yaml
+    on_empty: render
+    data:
+      resource_name: production_redis_nodes

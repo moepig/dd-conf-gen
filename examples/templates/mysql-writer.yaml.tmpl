@@ -1,0 +1,18 @@
+init_config:
+
+instances:
+{{- $found := false }}
+{{- range .Resources }}
+  {{- if index .Metadata "IsWriter" }}
+  {{- $found = true }}
+  - host: {{ .Host | quote }}
+    port: {{ .Port }}
+    username: "%%env_MYSQL_USERNAME%%"
+    password: "%%env_MYSQL_PASSWORD%%"
+    tags:
+      - "role:writer"
+      - {{ printf "cluster:%s" (index .Metadata "ClusterName") | quote }}
+  {{- end }}
+{{- end }}
+{{- if not $found }} []
+{{- end }}
