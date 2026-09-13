@@ -31,5 +31,6 @@ dd-conf-gen -config gen-config.yaml
 - [インストールと CLI](docs/usage.md)
 - [生成設定とテンプレート](docs/configuration.md)
 - [設定生成の設計](docs/architecture.md)
+- [プロバイダーとレジストリの関係](docs/provider-modularity.md)
 - [Agent によるシークレット参照](docs/secrets.md)
 - [開発](docs/development.md)
