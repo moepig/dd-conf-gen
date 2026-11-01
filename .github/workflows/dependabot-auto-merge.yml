@@ -1,62 +1,36 @@
 name: Dependabot auto-merge
 
 on:
-  pull_request_target:
-    branches:
-      - main
+  workflow_run:
+    workflows: [Run test]
+    types: [completed]
 
 permissions:
   actions: read
   contents: write
   pull-requests: write
 
+concurrency:
+  group: dependabot-auto-merge
+  cancel-in-progress: false
+
 jobs:
   dependabot:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
-    env:
-      GH_REPO: ${{ github.repository }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PR_URL: ${{ github.event.pull_request.html_url }}
-      PR_SHA: ${{ github.event.pull_request.head.sha }}
+    timeout-minutes: 5
     steps:
-      - name: Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
-      - name: Wait for PR tests
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch'
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in {1..120}; do
-            run_id=$(gh api --method GET "repos/$GH_REPO/actions/workflows/test.yml/runs" \
-              -f event=pull_request -f head_sha="$PR_SHA" -f per_page=1 \
-              --jq '.workflow_runs[0].id // empty')
-            if [[ -n "$run_id" ]]; then
-              gh run watch "$run_id" --exit-status --interval 10
-              tested=$(gh api "repos/$GH_REPO/actions/runs/$run_id/jobs" \
-                --jq '[.jobs[] | select(.name == "test") | .steps[] | select(.name == "Run tests" and .conclusion == "success")] | length')
-              if [[ "$tested" -eq 0 ]]; then
-                echo "The Run tests step did not succeed" >&2
-                exit 1
-              fi
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "No test workflow found for the PR head commit" >&2
-          exit 1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
 
-      - name: Merge Dependabot PR
-        if: |
-          success() && (
-            steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-            steps.metadata.outputs.update-type == 'version-update:semver-patch'
-          )
-        run: gh pr merge --auto --merge --match-head-commit "$PR_SHA" "$PR_URL"
+      - name: Merge a tested Dependabot PR
+        run: node .github/scripts/dependabot-auto-merge.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
