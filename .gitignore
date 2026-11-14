@@ -32,3 +32,4 @@ main
 # IDE
 .vscode/
 .idea/
+/dist/
