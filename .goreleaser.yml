@@ -32,7 +32,11 @@ snapshot:
 changelog:
   disable: true
 release:
-  draft: true
-  use_existing_draft: true
+  draft: false
+  use_existing_draft: false
   replace_existing_artifacts: false
   mode: keep-existing
+  replace_existing_draft: false
+
+  preflight:
+    fail_on_error: true
