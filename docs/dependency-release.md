@@ -1,5 +1,11 @@
 # 依存更新とリリース
 
+Datadog Agent のチェック設定を生成する CLI である。Linux の amd64・arm64 向けバイナリと checksums.txt を公開する。利用環境の AWS 認証情報や Datadog の秘密値は配布物に含めない。
+
+## CI と配布の確認
+
+race test とカバレッジ収集に加え、GoReleaser の snapshot で Linux の両アーキテクチャをビルドする。 詳細は [設定と利用方法](../README.md)を参照する。
+
 ## 導入条件
 
 専用 GitHub App、main 限定の automation Environment、必須 ci、レビュー、CODEOWNERS、immutable releases を設定してから導入する。実イベントの受入が済むまで DEPENDABOT_AUTO_MERGE は false とする。
@@ -16,7 +22,7 @@ main の push で Release Please がリリース PR を作成・更新する。�
 
 GoReleaser OSS がビルドと配布を同じジョブで行う。GITHUB_TOKEN に公開権限を与えるため、レビュー済み main とビルド依存を信頼する。App の秘密鍵は別ジョブに保つ。配布設定は GoReleaser の設定ファイルに置く。
 
-GitHub の immutable releases で公開後の添付とタグを保護する。Latest は標準動作に従い、GHCR latest の自動更新は行わない。利用者はバージョンまたは digest を指定する。
+GitHub の immutable releases で公開後の添付とタグを保護する。Latest は GitHub の標準動作に従う。
 
 ## 失敗時の再実行
 
@@ -26,4 +32,4 @@ GitHub の immutable releases で公開後の添付とタグを保護する。La
 
 有効化変数を false にし、ワークフローを無効化する。実行中・待機中の実行をキャンセルし、終了を確認してから各 PR の auto-merge を解除する。最後に実行と予約を再確認する。公開停止中はリリース PR をマージしない。
 
-[管理リポジトリの設計](https://github.com/moepig/github/blob/automation/dependency-release/docs/dependency-release-design.md)と[運用手順](https://github.com/moepig/github/blob/automation/dependency-release/docs/operations/dependency-release.md)に従う。
+管理者による App・保護設定の操作は、[GitHub 設定の管理](https://github.com/moepig/github/blob/automation/dependency-release/docs/management.md)を参照する。
