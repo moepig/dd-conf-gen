@@ -1,0 +1,23 @@
+{
+  "project": "dd-conf-gen",
+  "assets": [
+    "dd-conf-gen_{version}_linux_amd64",
+    "dd-conf-gen_{version}_linux_arm64",
+    "checksums.txt"
+  ],
+  "binaries": [
+    {
+      "asset": "dd-conf-gen_{version}_linux_amd64",
+      "id": "dd-conf-gen",
+      "os": "linux",
+      "arch": "amd64"
+    },
+    {
+      "asset": "dd-conf-gen_{version}_linux_arm64",
+      "id": "dd-conf-gen",
+      "os": "linux",
+      "arch": "arm64"
+    }
+  ],
+  "containers": []
+}
